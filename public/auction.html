@@ -105,6 +105,8 @@ const AID = location.pathname.split('/').pop();
 const socket = io();
 let teams = [], currentPlayer = null, currentBid = 0, currentBidder = null;
 let cdInterval = null, cdVal = 30, playerIdx = 0, totalPlayers = 0;
+let maxPlayersPerTeam = 11;
+let teamPlayerCounts = {}; // teamId → count
 const RCL = { Batsman:'rb-bat', Bowler:'rb-bowl', 'All-Rounder':'rb-all', 'Wicket-Keeper':'rb-wk' };
 
 // Join auction room
@@ -115,10 +117,13 @@ socket.emit('join_auction', { auctionId: parseInt(AID) });
   const r = await fetch(`/api/auctions/${AID}`);
   const { auction } = await r.json();
   document.getElementById('a-title').textContent = auction.name;
+  maxPlayersPerTeam = auction.max_players_per_team || 11;
 })();
 
 socket.on('auction_state', (state) => {
   teams = state.teams;
+  if (state.auction) maxPlayersPerTeam = state.auction.max_players_per_team || 11;
+  if (state.playerCounts) teamPlayerCounts = state.playerCounts;
   totalPlayers = state.pending_count + state.sold_count + state.unsold_count;
   document.getElementById('sb-sold').textContent   = state.sold_count;
   document.getElementById('sb-unsold').textContent = state.unsold_count;
@@ -154,14 +159,10 @@ socket.on('player_up', ({ player, base_price }) => {
   document.getElementById('prog-bar').style.width = pct+'%';
   document.getElementById('prog-lbl').textContent = `${done} / ${totalPlayers} players`;
   document.getElementById('prog-pct').textContent = pct+'%';
-
   document.getElementById('sb-rem').textContent = Math.max(0, totalPlayers - done - 1);
 
-  // Enable bid buttons
-  teams.forEach((t, i) => {
-    const btn = document.getElementById(`bbtn-${i}`);
-    if (btn) btn.disabled = (t.purse - t.spent) < base_price;
-  });
+  // Refresh bid buttons (eligibility)
+  refreshBidButtons(base_price);
 
   show(['btn-unsold','btn-reset']); hide(['btn-next','btn-sold']);
   document.getElementById('bid-entries').innerHTML = '';
@@ -178,11 +179,15 @@ socket.on('bid_placed', ({ teamId, teamName, bidAmount }) => {
   const row = document.querySelector(`[data-team-id="${teamId}"]`);
   if (row) row.classList.add('highest');
 
-  // Disable teams that can't outbid (roughly)
-  const inc = parseFloat(document.querySelector('[data-inc]')?.dataset?.inc || 0.25);
+  const inc = maxBidIncrement();
+  // Disable teams that can't outbid OR are full
   teams.forEach((t, i) => {
     const btn = document.getElementById(`bbtn-${i}`);
-    if (btn && t.id !== teamId) btn.disabled = (t.purse - t.spent) < bidAmount + inc;
+    if (!btn) return;
+    const isFull = (teamPlayerCounts[t.id] || 0) >= maxPlayersPerTeam;
+    const cantAfford = (t.purse - t.spent) < bidAmount + inc;
+    btn.disabled = isFull || (t.id !== teamId && cantAfford);
+    updateBidBtnLabel(btn, t, i);
   });
 
   addBidLog(`${teamName}: ₹${bidAmount}Cr`);
@@ -195,15 +200,26 @@ socket.on('bid_reset', ({ base_price }) => {
   document.getElementById('st-bid').textContent = `₹${base_price}Cr`;
   hide(['btn-sold']);
   document.querySelectorAll('.team-bid-row').forEach(r => r.classList.remove('highest'));
-  teams.forEach((t,i)=>{ const b=document.getElementById(`bbtn-${i}`); if(b) b.disabled=(t.purse-t.spent)<base_price; });
+  refreshBidButtons(base_price);
   addBidLog('Bid reset by auctioneer');
   startCountdown();
 });
 
-socket.on('player_sold', ({ player, team, price, sold_count }) => {
-  // Update team spent
+socket.on('player_sold', ({ player, team, price, sold_count, playerCounts }) => {
+  // Update team spent & player counts
   const t = teams.find(x => x.id === team.id);
-  if (t) { t.spent += price; document.getElementById(`purse-${teams.indexOf(t)}`).textContent = (t.purse - t.spent).toFixed(2); }
+  if (t) {
+    t.spent += price;
+    document.getElementById(`purse-${teams.indexOf(t)}`)?.textContent && (document.getElementById(`purse-${teams.indexOf(t)}`).textContent = (t.purse - t.spent).toFixed(2));
+  }
+  if (playerCounts) {
+    teamPlayerCounts = playerCounts;
+    // Update squad count labels
+    teams.forEach((tm, i) => {
+      const el = document.getElementById(`squad-${i}`);
+      if (el) el.textContent = `${teamPlayerCounts[tm.id] || 0}/${maxPlayersPerTeam}`;
+    });
+  }
 
   document.getElementById('sb-sold').textContent = sold_count;
   clearInterval(cdInterval);
@@ -229,8 +245,19 @@ socket.on('player_unsold', ({ player, unsold_count }) => {
   }, 2500);
 });
 
-socket.on('reshuffle', ({ count }) => {
-  showToast(`🔄 ${count} unsold players reshuffled!`);
+socket.on('reshuffle', ({ count, reshuffleCount }) => {
+  const warningMsg = reshuffleCount >= 1
+    ? `🔄 ${count} unsold players reshuffled! (Round ${reshuffleCount}/2 — auto-assign next!)`
+    : `🔄 ${count} unsold players reshuffled!`;
+  showToast(warningMsg);
+});
+
+// Auto-assign event — shown before auction_complete redirects
+socket.on('auto_assign', ({ assignments }) => {
+  assignments.forEach(({ player, team }) => {
+    addBidLog(`🤝 AUTO: ${player.name} → ${team.name}`);
+  });
+  showToast(`🤝 ${assignments.length} player(s) auto-assigned to teams!`);
 });
 
 socket.on('auction_complete', (stats) => {
@@ -250,34 +277,78 @@ function confirmSold() { if(!currentBidder)  { showToast('No bid placed!'); retu
 function placeBid(teamId, teamIdx) {
   if (!currentPlayer) return;
   const team = teams[teamIdx];
-  const inc  = parseFloat(document.querySelector('[data-inc]')?.dataset?.inc || 0.25);
+  const inc  = maxBidIncrement();
   const amt  = currentBidder === null ? currentPlayer.base_price : parseFloat((currentBid + inc).toFixed(2));
   if ((team.purse - team.spent) < amt) { showToast('Insufficient purse!'); return; }
+  if ((teamPlayerCounts[teamId] || 0) >= maxPlayersPerTeam) { showToast('Squad is full!'); return; }
   socket.emit('place_bid', { auctionId: parseInt(AID), teamId, bidAmount: amt });
+}
+
+function maxBidIncrement() {
+  const incEl = document.querySelector('[data-inc]');
+  return parseFloat(incEl?.dataset?.inc || 0.25);
+}
+
+// Eligibility check for a team
+function isTeamEligible(team) {
+  const isFull    = (teamPlayerCounts[team.id] || 0) >= maxPlayersPerTeam;
+  const broke     = (team.purse - team.spent) <= 0;
+  return !isFull && !broke;
+}
+
+function eligibilityReason(team) {
+  if ((teamPlayerCounts[team.id] || 0) >= maxPlayersPerTeam) return 'FULL SQUAD';
+  if ((team.purse - team.spent) <= 0) return 'NO FUNDS';
+  return null;
+}
+
+function updateBidBtnLabel(btn, team, idx) {
+  // Already handled by disabled state; no extra text needed on BID button
+}
+
+function refreshBidButtons(currentPrice) {
+  teams.forEach((t, i) => {
+    const btn = document.getElementById(`bbtn-${i}`);
+    if (!btn) return;
+    const isFull    = (teamPlayerCounts[t.id] || 0) >= maxPlayersPerTeam;
+    const cantAfford = (t.purse - t.spent) < currentPrice;
+    btn.disabled = isFull || cantAfford;
+
+    // Visual reason tag
+    const reasonEl = document.getElementById(`reason-${i}`);
+    if (reasonEl) {
+      const reason = eligibilityReason(t);
+      reasonEl.textContent  = reason || '';
+      reasonEl.style.display = reason ? 'inline-block' : 'none';
+    }
+  });
 }
 
 function renderTeams() {
   const list = document.getElementById('teams-list');
-  // Store bid increment in DOM for access
+  // Store bid increment in DOM
   fetch(`/api/auctions/${AID}`).then(r=>r.json()).then(({auction}) => {
-    document.body.dataset.inc = auction.bid_increment;
-    // Create a hidden el for inc
     let incEl = document.querySelector('[data-inc]');
     if (!incEl) { incEl = document.createElement('span'); incEl.style.display='none'; document.body.appendChild(incEl); }
     incEl.dataset.inc = auction.bid_increment;
   });
 
-  list.innerHTML = teams.map((t, i) => `
+  list.innerHTML = teams.map((t, i) => {
+    const squadCount = teamPlayerCounts[t.id] || 0;
+    const reason     = eligibilityReason(t);
+    return `
     <div class="team-bid-row" id="trow-${i}" data-team-id="${t.id}">
       <div style="display:flex;align-items:center;gap:10px;">
         <div class="mini-logo">${t.logo_path?`<img src="${t.logo_path}">`:(t.emoji||'🏏')}</div>
         <div>
           <div style="font-family:'Rajdhani',sans-serif;font-size:.92rem;font-weight:700;">${t.name}</div>
-          <div style="font-size:.7rem;color:var(--muted);">💰 ₹<span id="purse-${i}">${(t.purse-t.spent).toFixed(2)}</span>Cr</div>
+          <div style="font-size:.7rem;color:var(--muted);">💰 ₹<span id="purse-${i}">${(t.purse-t.spent).toFixed(2)}</span>Cr &nbsp;·&nbsp; 👥 <span id="squad-${i}">${squadCount}/${maxPlayersPerTeam}</span></div>
+          ${reason ? `<span id="reason-${i}" style="font-size:.65rem;color:var(--red);font-weight:700;background:rgba(255,51,102,.12);padding:1px 6px;border-radius:4px;">${reason}</span>` : `<span id="reason-${i}" style="display:none;font-size:.65rem;color:var(--red);font-weight:700;background:rgba(255,51,102,.12);padding:1px 6px;border-radius:4px;"></span>`}
         </div>
       </div>
       <button class="bid-btn" id="bbtn-${i}" onclick="placeBid(${t.id},${i})" disabled>BID</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function startCountdown() {

@@ -31,13 +31,13 @@ router.get('/api/auctions', (req, res) => {
 
 // POST /api/auctions — create new auction
 router.post('/api/auctions', (req, res) => {
-  const { name, season, num_teams, purse_per_team, bid_increment } = req.body;
+  const { name, season, num_teams, purse_per_team, bid_increment, max_players_per_team } = req.body;
   if (!name) return res.status(400).json({ error: 'Auction name required' });
   const db = getDB();
   const result = db.prepare(`
-    INSERT INTO auctions (user_id, name, season, num_teams, purse_per_team, bid_increment)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(req.user.id, name, season || '2025', num_teams || 8, purse_per_team || 100, bid_increment || 0.25);
+    INSERT INTO auctions (user_id, name, season, num_teams, purse_per_team, bid_increment, max_players_per_team)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(req.user.id, name, season || '2025', num_teams || 8, purse_per_team || 100, bid_increment || 0.25, max_players_per_team || 11);
   logEvent(result.lastInsertRowid, 'AUCTION_CREATED', `Auction "${name}" created`);
   res.json({ success: true, auction_id: result.lastInsertRowid });
 });

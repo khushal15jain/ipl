@@ -37,18 +37,19 @@ function initSchema() {
     --  AUCTIONS TABLE
     -- ─────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS auctions (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id         INTEGER NOT NULL,
-      name            TEXT    NOT NULL,
-      season          TEXT    DEFAULT '2025',
-      num_teams       INTEGER DEFAULT 8,
-      purse_per_team  REAL    DEFAULT 100.0,
-      bid_increment   REAL    DEFAULT 0.25,
-      status          TEXT    DEFAULT 'draft',  -- draft | live | completed
-      current_player_id INTEGER,
-      created_at      TEXT    DEFAULT (datetime('now','localtime')),
-      started_at      TEXT,
-      completed_at    TEXT,
+      id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id               INTEGER NOT NULL,
+      name                  TEXT    NOT NULL,
+      season                TEXT    DEFAULT '2025',
+      num_teams             INTEGER DEFAULT 8,
+      purse_per_team        REAL    DEFAULT 100.0,
+      bid_increment         REAL    DEFAULT 0.25,
+      max_players_per_team  INTEGER DEFAULT 11,
+      status                TEXT    DEFAULT 'draft',  -- draft | live | completed
+      current_player_id     INTEGER,
+      created_at            TEXT    DEFAULT (datetime('now','localtime')),
+      started_at            TEXT,
+      completed_at          TEXT,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
@@ -133,6 +134,11 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_bids_player      ON bids(player_id);
     CREATE INDEX IF NOT EXISTS idx_history_auction  ON auction_history(auction_id);
   `);
+
+  // Migration: add max_players_per_team to existing DBs
+  try {
+    db.exec(`ALTER TABLE auctions ADD COLUMN max_players_per_team INTEGER DEFAULT 11`);
+  } catch (_) { /* column already exists */ }
 
   console.log(`✅ SQLite database ready → ${DB_PATH}`);
 }
