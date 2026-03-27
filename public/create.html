@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Create Auction — IPL Auction</title>
+<link rel="stylesheet" href="/css/main.css">
+</head>
+<body class="page">
+
+<div class="topbar">
+  <div class="logo">IPL <span>AUCTION</span></div>
+  <a href="/dashboard" class="btn btn-outline btn-sm">← DASHBOARD</a>
+</div>
+
+<div class="container">
+  <div style="margin-bottom:24px;">
+    <div class="page-title">🏗️ CREATE AUCTION</div>
+    <div style="color:var(--muted);font-size:.84rem;margin-top:4px;">All data saved to SQLite → auction.db</div>
+  </div>
+
+  <!-- Steps -->
+  <div class="steps">
+    <div class="step active" id="s1"><div class="step-n">1</div><div class="step-label">SETUP</div></div>
+    <div class="step-line"></div>
+    <div class="step" id="s2"><div class="step-n">2</div><div class="step-label">TEAMS</div></div>
+    <div class="step-line"></div>
+    <div class="step" id="s3"><div class="step-n">3</div><div class="step-label">PLAYERS</div></div>
+    <div class="step-line"></div>
+    <div class="step" id="s4"><div class="step-n">4</div><div class="step-label">LAUNCH</div></div>
+  </div>
+
+  <!-- Step 1: Setup -->
+  <div id="p1">
+    <div class="card card-accent" style="margin-bottom:16px;">
+      <div class="section-title">⚙️ Auction Configuration</div>
+      <div class="grid-2">
+        <div class="form-group"><label>Auction Name</label><input type="text" id="a-name" placeholder="IPL 2025 Mega Auction"></div>
+        <div class="form-group"><label>Season / Year</label><input type="text" id="a-season" value="2025"></div>
+      </div>
+      <div class="grid-3">
+        <div class="form-group"><label>No. of Teams</label><input type="number" id="a-nt" min="2" max="12" value="8"></div>
+        <div class="form-group"><label>Purse Per Team (₹ Cr)</label><input type="number" id="a-purse" value="100" min="10"></div>
+        <div class="form-group"><label>Bid Increment (₹ Cr)</label><input type="number" id="a-inc" value="0.25" step="0.05" min="0.05"></div>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="createAuction()">NEXT → ADD TEAMS</button>
+  </div>
+
+  <!-- Step 2: Teams -->
+  <div id="p2" style="display:none;">
+    <div class="card card-accent" style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+        <div class="section-title" style="margin:0;">🏟️ Teams (<span id="tc">0</span> / <span id="tmax">8</span>)</div>
+        <button class="btn btn-gold btn-sm" id="add-team-btn" onclick="openTeamModal()">＋ ADD TEAM</button>
+      </div>
+      <div class="grid-auto" id="teams-grid">
+        <div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--muted);">
+          <div style="font-size:2rem;margin-bottom:10px;">🏟️</div><div>No teams yet</div>
+        </div>
+      </div>
+    </div>
+    <div class="flex gap12 wrap">
+      <button class="btn btn-outline" onclick="goStep(1)">← BACK</button>
+      <button class="btn btn-primary" onclick="goStep(3)">NEXT → ADD PLAYERS</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Players -->
+  <div id="p3" style="display:none;">
+    <div class="card card-accent" style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+        <div class="section-title" style="margin:0;">👥 Players (<span id="plc">0</span> added)</div>
+        <div class="flex gap12 wrap">
+          <button class="btn btn-green btn-sm" onclick="openPlayerModal()">＋ ADD PLAYER</button>
+          <button class="btn btn-purple btn-sm" onclick="openCsvModal()">📥 IMPORT CSV</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="ptable">
+          <thead><tr><th>#</th><th>Name</th><th>Role</th><th>Age</th><th>Base</th><th>Nationality</th><th>Photo</th><th>Source</th><th class="th-actions"></th></tr></thead>
+          <tbody id="ptbody"><tr><td colspan="9" style="text-align:center;color:var(--muted);padding:28px;">No players yet — add manually or import CSV</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="flex gap12 wrap">
+      <button class="btn btn-outline" onclick="goStep(2)">← BACK</button>
+      <button class="btn btn-gold" onclick="goStep(4)">NEXT → LAUNCH</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Launch -->
+  <div id="p4" style="display:none;">
+    <div class="card card-accent" style="margin-bottom:16px;">
+      <div class="section-title">🚀 Ready to Launch!</div>
+      <div id="launch-summary" style="margin-bottom:24px;"></div>
+      <div class="flex gap12 wrap">
+        <button class="btn btn-outline" onclick="goStep(3)">← BACK</button>
+        <button class="btn btn-red" id="start-btn" onclick="startAuction()">🔴 START AUCTION NOW</button>
+        <button class="btn btn-outline" onclick="saveDraft()">💾 SAVE DRAFT</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── TEAM MODAL ── -->
+<div class="modal-bg" id="team-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('team-modal')">✕</button>
+    <h3>🏟️ ADD TEAM</h3>
+    <div class="form-group"><label>Team Name *</label><input type="text" id="tm-name" placeholder="e.g. Mumbai Indians"></div>
+    <div class="form-group">
+      <label>Team Logo (optional)</label>
+      <div class="file-zone" id="tm-logo-zone">
+        <input type="file" accept="image/*" id="tm-logo-inp" onchange="previewFile(event,'tm-logo-prev','tm-logo-zone')">
+        <span id="tm-logo-prev"><span class="fz-icon">🏏</span><p>Click to upload logo</p></span>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group"><label>Captain Name</label><input type="text" id="tm-cap" placeholder="e.g. Rohit Sharma"></div>
+      <div class="form-group"><label>Retained Player</label><input type="text" id="tm-ret" placeholder="e.g. Bumrah"></div>
+    </div>
+    <button class="btn btn-gold btn-full mt16" onclick="submitTeam()">✓ ADD TEAM</button>
+  </div>
+</div>
+
+<!-- ── PLAYER MODAL ── -->
+<div class="modal-bg" id="player-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('player-modal')">✕</button>
+    <h3>👤 ADD PLAYER</h3>
+    <div class="form-group"><label>Player Name *</label><input type="text" id="pm-name" placeholder="e.g. Virat Kohli"></div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label>Role</label>
+        <select id="pm-role">
+          <option value="Batsman">🏏 Batsman</option>
+          <option value="Bowler">🎳 Bowler</option>
+          <option value="All-Rounder">⭐ All-Rounder</option>
+          <option value="Wicket-Keeper">🧤 Wicket-Keeper</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Age *</label><input type="number" id="pm-age" min="15" max="55" placeholder="25"></div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label>Base Price (₹ Cr)</label>
+        <select id="pm-base">
+          <option value="0.20">₹ 20 Lakh</option><option value="0.30">₹ 30 Lakh</option>
+          <option value="0.40">₹ 40 Lakh</option><option value="0.50">₹ 50 Lakh</option>
+          <option value="0.75">₹ 75 Lakh</option><option value="1.00" selected>₹ 1 Crore</option>
+          <option value="1.50">₹ 1.5 Crore</option><option value="2.00">₹ 2 Crore</option>
+          <option value="3.00">₹ 3 Crore</option><option value="5.00">₹ 5 Crore</option>
+          <option value="10.00">₹ 10 Crore</option><option value="15.00">₹ 15 Crore</option>
+          <option value="20.00">₹ 20 Crore</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Nationality</label><input type="text" id="pm-nat" value="Indian" placeholder="Indian"></div>
+    </div>
+    <div class="form-group">
+      <label>Player Photo (optional)</label>
+      <div class="file-zone">
+        <input type="file" accept="image/*" id="pm-photo-inp" onchange="previewFile(event,'pm-photo-prev','pm-photo-zone')">
+        <span id="pm-photo-prev" id="pm-photo-zone"><span class="fz-icon">🧑</span><p>Click to upload photo</p></span>
+      </div>
+    </div>
+    <button class="btn btn-green btn-full mt16" onclick="submitPlayer()">✓ ADD PLAYER</button>
+  </div>
+</div>
+
+<!-- ── CSV IMPORT MODAL ── -->
+<div class="modal-bg" id="csv-modal">
+  <div class="modal modal-wide">
+    <button class="modal-close" onclick="closeModal('csv-modal')">✕</button>
+    <h3>📥 IMPORT PLAYERS VIA CSV</h3>
+
+    <div class="csv-info" style="margin-bottom:20px;">
+      <div style="font-family:'Orbitron',monospace;font-size:.75rem;color:var(--cyan);margin-bottom:10px;">📋 CSV FORMAT (first row = header):</div>
+      <code>name, role, age, base_price, nationality, image_filename</code>
+      <div style="margin-top:12px;font-size:.82rem;color:var(--muted);line-height:1.7;">
+        <strong style="color:var(--text);">Columns:</strong><br>
+        • <code>name</code> — Player full name (required)<br>
+        • <code>role</code> — Batsman / Bowler / All-Rounder / Wicket-Keeper<br>
+        • <code>age</code> — Integer age<br>
+        • <code>base_price</code> — Price in Crores (e.g. 1.5)<br>
+        • <code>nationality</code> — Indian / Overseas etc.<br>
+        • <code>image_filename</code> — filename of uploaded image (e.g. virat.jpg)
+      </div>
+      <div style="margin-top:12px;font-family:'Orbitron',monospace;font-size:.7rem;color:var(--gold);">EXAMPLE ROW:</div>
+      <code style="font-size:.76rem;line-height:1.8;display:block;margin-top:4px;">
+        Virat Kohli, Batsman, 35, 20, Indian, virat.jpg<br>
+        Jasprit Bumrah, Bowler, 30, 15, Indian, bumrah.png<br>
+        AB de Villiers, All-Rounder, 38, 10, South African,
+      </code>
+      <button class="btn btn-outline btn-sm mt16" onclick="downloadSampleCSV()" style="font-size:.75rem;">⬇ DOWNLOAD SAMPLE CSV</button>
+    </div>
+
+    <div class="form-group">
+      <label>Upload CSV File *</label>
+      <div class="file-zone">
+        <input type="file" accept=".csv,.txt" id="csv-file-inp">
+        <span id="csv-file-prev"><span class="fz-icon">📄</span><p>Click to select your .csv file</p></span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Upload Player Images (optional)</label>
+      <div class="file-zone">
+        <input type="file" accept="image/*" id="csv-images-inp" multiple>
+        <span id="csv-images-prev"><span class="fz-icon">🖼️</span><p>Select multiple images (filenames must match CSV image_filename column)</p></span>
+      </div>
+    </div>
+
+    <div class="error-msg" id="csv-err"></div>
+    <div class="success-msg" id="csv-ok"></div>
+
+    <button class="btn btn-purple btn-full mt16" onclick="submitCSV()" id="csv-submit-btn">📥 IMPORT PLAYERS</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let auctionId = null;
+const RCL = { Batsman:'rb-bat', Bowler:'rb-bowl', 'All-Rounder':'rb-all', 'Wicket-Keeper':'rb-wk' };
+
+// ── Step navigation ──────────────────────────────────────
+function goStep(n) {
+  for (let i=1;i<=4;i++){
+    document.getElementById(`p${i}`).style.display = i===n?'block':'none';
+    const s = document.getElementById(`s${i}`);
+    s.className = 'step'+(i<n?' done':i===n?' active':'');
+  }
+  if (n===4) renderSummary();
+}
+
+// ── Create auction in DB ──────────────────────────────────
+async function createAuction() {
+  const name = document.getElementById('a-name').value.trim();
+  if (!name) { showToast('Auction name is required!'); return; }
+  if (auctionId) { goStep(2); return; } // already created, just navigate
+
+  const body = {
+    name, season: document.getElementById('a-season').value,
+    num_teams: parseInt(document.getElementById('a-nt').value),
+    purse_per_team: parseFloat(document.getElementById('a-purse').value),
+    bid_increment: parseFloat(document.getElementById('a-inc').value),
+  };
+  const r = await fetch('/api/auctions', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+  const d = await r.json();
+  if (!r.ok) { showToast(d.error); return; }
+  auctionId = d.auction_id;
+  document.getElementById('tmax').textContent = body.num_teams;
+  goStep(2);
+  loadTeams(); loadPlayers();
+  showToast(`Auction saved to database! ID: ${auctionId} 💾`);
+}
+
+// ── TEAMS ─────────────────────────────────────────────────
+let teamsData = [];
+
+function openTeamModal() {
+  if (!auctionId) { showToast('Save auction setup first!'); return; }
+  ['tm-name','tm-cap','tm-ret'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('tm-logo-prev').innerHTML = '<span class="fz-icon">🏏</span><p>Click to upload logo</p>';
+  document.getElementById('tm-logo-inp').value='';
+  openModal('team-modal');
+}
+
+async function submitTeam() {
+  const name = document.getElementById('tm-name').value.trim();
+  if (!name) { showToast('Team name required!'); return; }
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('captain', document.getElementById('tm-cap').value.trim());
+  fd.append('retained_player', document.getElementById('tm-ret').value.trim());
+  const logoFile = document.getElementById('tm-logo-inp').files[0];
+  if (logoFile) fd.append('logo', logoFile);
+
+  const r = await fetch(`/api/auctions/${auctionId}/teams`, { method:'POST', body:fd });
+  const d = await r.json();
+  if (!r.ok) { showToast(d.error); return; }
+  closeModal('team-modal');
+  loadTeams(); loadPlayers();
+  showToast(`${name} added to database! 🏟️`);
+}
+
+async function loadTeams() {
+  const r = await fetch(`/api/auctions/${auctionId}`);
+  const { teams, auction } = await r.json();
+  teamsData = teams;
+  document.getElementById('tc').textContent = teams.length;
+  document.getElementById('tmax').textContent = auction.num_teams;
+  const btn = document.getElementById('add-team-btn');
+  if (btn) btn.style.display = teams.length >= auction.num_teams ? 'none' : 'inline-flex';
+
+  const grid = document.getElementById('teams-grid');
+  if (!teams.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:28px;color:var(--muted);"><div style="font-size:1.8rem;margin-bottom:8px;">🏟️</div><div>No teams yet</div></div>';
+    return;
+  }
+  grid.innerHTML = teams.map(t => `
+    <div class="team-card">
+      <div class="team-logo-wrap">${t.logo_path?`<img src="${t.logo_path}">`:t.emoji}</div>
+      <h4>${t.name}</h4>
+      <p>👑 ${t.captain||'—'}</p>
+      ${t.retained_player?`<p style="color:var(--gold);font-size:.72rem;margin-top:2px;">🔒 ${t.retained_player}</p>`:''}
+      <button class="del-btn mt8" onclick="deleteTeam(${t.id})">✕</button>
+    </div>`).join('');
+}
+
+async function deleteTeam(id) {
+  await fetch(`/api/teams/${id}`, { method:'DELETE' });
+  loadTeams(); showToast('Team removed.');
+}
+
+// ── PLAYERS ──────────────────────────────────────────────
+function openPlayerModal() {
+  if (!auctionId) { showToast('Save auction setup first!'); return; }
+  ['pm-name','pm-age','pm-nat'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('pm-nat').value = 'Indian';
+  document.getElementById('pm-role').value = 'Batsman';
+  document.getElementById('pm-base').value = '1.00';
+  document.getElementById('pm-photo-inp').value='';
+  document.getElementById('pm-photo-prev').innerHTML = '<span class="fz-icon">🧑</span><p>Click to upload photo</p>';
+  openModal('player-modal');
+}
+
+async function submitPlayer() {
+  const name = document.getElementById('pm-name').value.trim();
+  const age  = document.getElementById('pm-age').value;
+  if (!name) { showToast('Name required!'); return; }
+  if (!age)  { showToast('Age required!'); return; }
+
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('role', document.getElementById('pm-role').value);
+  fd.append('age', age);
+  fd.append('base_price', document.getElementById('pm-base').value);
+  fd.append('nationality', document.getElementById('pm-nat').value);
+  const photo = document.getElementById('pm-photo-inp').files[0];
+  if (photo) fd.append('photo', photo);
+
+  const r = await fetch(`/api/auctions/${auctionId}/players`, { method:'POST', body:fd });
+  const d = await r.json();
+  if (!r.ok) { showToast(d.error); return; }
+  closeModal('player-modal');
+  loadPlayers();
+  showToast(`${name} saved to database! 🏏`);
+}
+
+async function loadPlayers() {
+  const r = await fetch(`/api/auctions/${auctionId}`);
+  const { players } = await r.json();
+  const pending = players.filter(p => p.status === 'pending');
+  document.getElementById('plc').textContent = pending.length;
+
+  const tbody = document.getElementById('ptbody');
+  if (!pending.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:28px;">No players yet — add manually or import CSV</td></tr>';
+    return;
+  }
+  tbody.innerHTML = pending.map((p, i) => `
+    <tr>
+      <td style="color:var(--muted);">${i+1}</td>
+      <td style="font-weight:700;">${p.name}</td>
+      <td><span class="role-badge ${RCL[p.role]||'rb-bat'}">${p.role}</span></td>
+      <td>${p.age||'—'}</td>
+      <td style="color:var(--green);font-family:'Orbitron',monospace;font-size:.82rem;">₹${p.base_price}Cr</td>
+      <td style="color:var(--muted);font-size:.82rem;">${p.nationality||'—'}</td>
+      <td>${p.photo_path?`<img src="${p.photo_path}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">`:'—'}</td>
+      <td><span class="badge ${p.source==='csv'?'badge-live':'badge-draft'}">${p.source.toUpperCase()}</span></td>
+      <td style="text-align:right;"><button class="del-btn" onclick="deletePlayer(${p.id})">✕</button></td>
+    </tr>`).join('');
+}
+
+async function deletePlayer(id) {
+  await fetch(`/api/players/${id}`, { method:'DELETE' });
+  loadPlayers(); showToast('Player removed from database.');
+}
+
+// ── CSV IMPORT ────────────────────────────────────────────
+function openCsvModal() {
+  if (!auctionId) { showToast('Save auction setup first!'); return; }
+  document.getElementById('csv-file-inp').value='';
+  document.getElementById('csv-images-inp').value='';
+  document.getElementById('csv-file-prev').innerHTML='<span class="fz-icon">📄</span><p>Click to select your .csv file</p>';
+  document.getElementById('csv-images-prev').innerHTML='<span class="fz-icon">🖼️</span><p>Select multiple images</p>';
+  document.getElementById('csv-err').style.display='none';
+  document.getElementById('csv-ok').style.display='none';
+  openModal('csv-modal');
+}
+
+async function submitCSV() {
+  const csvFile = document.getElementById('csv-file-inp').files[0];
+  if (!csvFile) { showToast('Select a CSV file first!'); return; }
+
+  const btn = document.getElementById('csv-submit-btn');
+  btn.disabled = true; btn.textContent = '⏳ Importing...';
+
+  const fd = new FormData();
+  fd.append('csv', csvFile);
+  const images = document.getElementById('csv-images-inp').files;
+  for (const img of images) fd.append('images', img);
+
+  const r = await fetch(`/api/auctions/${auctionId}/players/csv`, { method:'POST', body:fd });
+  const d = await r.json();
+
+  btn.disabled = false; btn.textContent = '📥 IMPORT PLAYERS';
+
+  const errEl = document.getElementById('csv-err');
+  const okEl  = document.getElementById('csv-ok');
+
+  if (!r.ok) {
+    errEl.textContent = d.error; errEl.style.display = 'block';
+    okEl.style.display = 'none';
+    return;
+  }
+  okEl.textContent = `✅ ${d.imported} players imported successfully into SQLite database!`;
+  okEl.style.display = 'block'; errEl.style.display = 'none';
+  loadPlayers();
+  showToast(`${d.imported} players imported from CSV! 📊`);
+  setTimeout(() => closeModal('csv-modal'), 2000);
+}
+
+function downloadSampleCSV() {
+  const csv = `name,role,age,base_price,nationality,image_filename\nVirat Kohli,Batsman,35,20,Indian,virat.jpg\nJasprit Bumrah,Bowler,30,15,Indian,bumrah.png\nRohit Sharma,Batsman,36,15,Indian,rohit.jpg\nHardik Pandya,All-Rounder,30,12,Indian,hardik.jpg\nMS Dhoni,Wicket-Keeper,42,10,Indian,dhoni.jpg\nAB de Villiers,All-Rounder,38,8,South African,\nPatrick Cummins,Bowler,31,7,Australian,`;
+  const blob = new Blob([csv], { type:'text/csv' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'sample_players.csv'; a.click();
+}
+
+// ── File preview ──────────────────────────────────────────
+function previewFile(e, previewId, zoneId) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById(previewId).innerHTML = `<img src="${ev.target.result}" class="fz-preview">`;
+  };
+  reader.readAsDataURL(file);
+
+  // Update CSV/image zone labels
+  if (e.target.id === 'csv-file-inp') {
+    document.getElementById('csv-file-prev').innerHTML = `<span class="fz-icon">✅</span><p>${file.name}</p>`;
+  }
+}
+
+// Override for CSV file (no image preview)
+document.addEventListener('change', e => {
+  if (e.target.id === 'csv-file-inp') {
+    const f = e.target.files[0];
+    if (f) document.getElementById('csv-file-prev').innerHTML = `<span class="fz-icon">✅</span><p>${f.name}</p>`;
+  }
+  if (e.target.id === 'csv-images-inp') {
+    const count = e.target.files.length;
+    document.getElementById('csv-images-prev').innerHTML = `<span class="fz-icon">🖼️</span><p>${count} image(s) selected</p>`;
+  }
+});
+
+// ── Summary & launch ──────────────────────────────────────
+async function renderSummary() {
+  const r = await fetch(`/api/auctions/${auctionId}`);
+  const { auction, teams, players } = await r.json();
+  const pending = players.filter(p=>p.status==='pending');
+  document.getElementById('launch-summary').innerHTML = `
+    <div class="grid-3">
+      <div class="stat-chip"><div class="val">${auction.name}</div><div class="lbl">AUCTION NAME</div></div>
+      <div class="stat-chip"><div class="val" style="color:var(--cyan);">${teams.length}</div><div class="lbl">TEAMS</div></div>
+      <div class="stat-chip"><div class="val" style="color:var(--green);">${pending.length}</div><div class="lbl">PLAYERS</div></div>
+      <div class="stat-chip"><div class="val" style="color:var(--gold);">₹${auction.purse_per_team}Cr</div><div class="lbl">PURSE / TEAM</div></div>
+      <div class="stat-chip"><div class="val" style="color:var(--purple);">₹${auction.bid_increment}Cr</div><div class="lbl">BID INCREMENT</div></div>
+      <div class="stat-chip"><div class="val" style="color:var(--text);">${auction.season}</div><div class="lbl">SEASON</div></div>
+    </div>
+    ${teams.length<2?'<div class="error-msg" style="display:block;margin-top:12px;">⚠️ Need at least 2 teams!</div>':''}
+    ${!pending.length?'<div class="error-msg" style="display:block;margin-top:8px;">⚠️ Need at least 1 player!</div>':''}
+  `;
+  document.getElementById('start-btn').disabled = teams.length < 2 || !pending.length;
+}
+
+async function startAuction() {
+  await fetch(`/api/auctions/${auctionId}/status`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status:'live'}) });
+  location.href = `/auction/${auctionId}`;
+}
+
+async function saveDraft() {
+  showToast('Auction saved as draft! 💾');
+  setTimeout(() => location.href = '/dashboard', 1500);
+}
+
+// ── Modal helpers ─────────────────────────────────────────
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-bg').forEach(o => o.addEventListener('click', e => { if(e.target===o) o.classList.remove('open'); }));
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+</script>
+</body>
+</html>

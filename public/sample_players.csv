@@ -1,0 +1,21 @@
+name,role,age,base_price,nationality,image_filename
+Virat Kohli,Batsman,35,20,Indian,virat.jpg
+Rohit Sharma,Batsman,36,15,Indian,rohit.jpg
+Jasprit Bumrah,Bowler,30,15,Indian,bumrah.jpg
+MS Dhoni,Wicket-Keeper,42,10,Indian,dhoni.jpg
+Hardik Pandya,All-Rounder,30,12,Indian,hardik.jpg
+KL Rahul,Batsman,32,14,Indian,
+Ravindra Jadeja,All-Rounder,35,12,Indian,
+Yuzvendra Chahal,Bowler,33,8,Indian,
+Shubman Gill,Batsman,24,12,Indian,
+Rishabh Pant,Wicket-Keeper,26,16,Indian,
+Mohammed Shami,Bowler,33,10,Indian,
+AB de Villiers,All-Rounder,38,8,South African,
+David Warner,Batsman,37,8,Australian,
+Chris Gayle,Batsman,44,5,West Indian,
+Rashid Khan,Bowler,25,9,Afghan,
+Jos Buttler,Wicket-Keeper,33,12,English,
+Ben Stokes,All-Rounder,32,10,English,
+Kieron Pollard,All-Rounder,36,5,West Indian,
+Kane Williamson,Batsman,33,7,New Zealander,
+Trent Boult,Bowler,34,6,New Zealander,

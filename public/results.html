@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Results — IPL Auction</title>
+<link rel="stylesheet" href="/css/main.css">
+</head>
+<body class="page">
+
+<div class="topbar">
+  <div class="logo">IPL <span>AUCTION</span></div>
+  <div style="display:flex;gap:10px;">
+    <button class="btn btn-outline btn-sm" onclick="printResults()">🖨️ PRINT</button>
+    <a href="/dashboard" class="btn btn-outline btn-sm">← DASHBOARD</a>
+  </div>
+</div>
+
+<div class="container">
+  <div style="margin-bottom:24px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+    <div>
+      <div class="page-title">🏆 AUCTION RESULTS</div>
+      <div id="result-sub" style="color:var(--muted);font-size:.84rem;margin-top:4px;">Loading...</div>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="loadHistory()">📋 VIEW HISTORY LOG</button>
+  </div>
+
+  <!-- Stats bar -->
+  <div id="stats-bar" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:28px;"></div>
+
+  <!-- Teams grid -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px;" id="results-grid"></div>
+</div>
+
+<!-- Team detail modal -->
+<div class="modal-bg" id="team-modal">
+  <div class="modal modal-wide">
+    <button class="modal-close" onclick="closeModal('team-modal')">✕</button>
+    <div id="team-detail-hdr"></div>
+    <div id="team-detail-players"></div>
+  </div>
+</div>
+
+<!-- History modal -->
+<div class="modal-bg" id="history-modal">
+  <div class="modal modal-wide">
+    <button class="modal-close" onclick="closeModal('history-modal')">✕</button>
+    <h3>📋 AUCTION EVENT LOG</h3>
+    <div style="overflow-x:auto;max-height:60vh;">
+      <table class="data-table">
+        <thead><tr><th>#</th><th>Time</th><th>Event</th><th>Description</th><th>Player</th><th>Team</th><th>Amount</th></tr></thead>
+        <tbody id="history-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const AID = location.pathname.split('/').pop();
+const RCL = { Batsman:'rb-bat', Bowler:'rb-bowl', 'All-Rounder':'rb-all', 'Wicket-Keeper':'rb-wk' };
+
+async function loadResults() {
+  const r = await fetch(`/api/auctions/${AID}/results`);
+  if (!r.ok) { document.getElementById('result-sub').textContent = 'Error loading results'; return; }
+  const { auction, teams, stats } = await r.json();
+
+  document.title = `Results — ${auction.name}`;
+  document.getElementById('result-sub').textContent = `${auction.name} · ${auction.season} · ${teams.length} teams`;
+
+  // Stats bar
+  document.getElementById('stats-bar').innerHTML = `
+    <div class="stat-chip"><div class="val" style="color:var(--green);">${stats.sold}</div><div class="lbl">PLAYERS SOLD</div></div>
+    <div class="stat-chip"><div class="val" style="color:var(--red);">${stats.unsold}</div><div class="lbl">UNSOLD</div></div>
+    <div class="stat-chip"><div class="val" style="color:var(--gold);">₹${stats.total_spent.toFixed(1)}Cr</div><div class="lbl">TOTAL SPENT</div></div>
+    <div class="stat-chip"><div class="val" style="color:var(--purple);">₹${stats.highest_bid?.toFixed(1)||0}Cr</div><div class="lbl">HIGHEST BID</div></div>
+    ${stats.costliest ? `<div class="stat-chip"><div class="val" style="font-size:.9rem;color:var(--cyan);">${stats.costliest.name}</div><div class="lbl">COSTLIEST PLAYER</div></div>` : ''}
+  `;
+
+  // Teams grid
+  document.getElementById('results-grid').innerHTML = teams.map(t => {
+    const spent = t.spent || 0;
+    const left  = t.purse - spent;
+    return `
+      <div class="team-result-card" onclick="showTeamDetail(${JSON.stringify(t).replace(/"/g,'&quot;')})">
+        <div class="trc-header">
+          <div class="trc-logo">${t.logo_path?`<img src="${t.logo_path}">`:(t.emoji||'🏏')}</div>
+          <div>
+            <div style="font-family:'Rajdhani',sans-serif;font-size:1.1rem;font-weight:700;">${t.name}</div>
+            <div style="font-size:.77rem;color:var(--muted);margin-top:2px;">${t.players.length} players · ₹${spent.toFixed(2)}Cr spent</div>
+            <div style="font-size:.77rem;color:var(--green);margin-top:2px;">💰 ₹${left.toFixed(2)}Cr remaining</div>
+          </div>
+        </div>
+        <div class="trc-body">
+          ${t.players.slice(0,5).map(p=>`
+            <div class="player-row">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div class="pl-avatar">${p.photo_path?`<img src="${p.photo_path}">`:'🏏'}</div>
+                <div>
+                  <div style="font-weight:700;font-size:.87rem;">${p.name} ${p.status==='retained'?'<span class="badge badge-retained">RET</span>':''}</div>
+                  <div style="font-size:.72rem;color:var(--muted);"><span class="role-badge ${RCL[p.role]||'rb-bat'}" style="font-size:.65rem;">${p.role}</span></div>
+                </div>
+              </div>
+              <div style="text-align:right;font-family:'Orbitron',monospace;font-size:.78rem;color:var(--green);">
+                ${p.status==='retained'?'🔒 Ret.':`₹${(p.sold_price||0).toFixed(2)}Cr`}
+              </div>
+            </div>`).join('')}
+          ${t.players.length>5?`<div style="text-align:center;color:var(--cyan);font-size:.78rem;padding:8px;cursor:pointer;">+${t.players.length-5} more players →</div>`:''}
+          ${!t.players.length?'<div style="text-align:center;color:var(--muted);padding:20px;font-size:.85rem;">No players acquired</div>':''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function showTeamDetail(t) {
+  document.getElementById('team-detail-hdr').innerHTML = `
+    <div style="display:flex;align-items:center;gap:18px;margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--border);">
+      <div class="trc-logo" style="width:70px;height:70px;font-size:1.8rem;">${t.logo_path?`<img src="${t.logo_path}">`:(t.emoji||'🏏')}</div>
+      <div>
+        <div style="font-family:'Orbitron',monospace;font-size:1.2rem;color:var(--gold);font-weight:700;">${t.name}</div>
+        ${t.captain?`<div style="color:var(--muted);font-size:.82rem;margin-top:3px;">👑 Captain: ${t.captain}</div>`:''}
+        <div style="font-family:'Orbitron',monospace;font-size:.82rem;color:var(--green);margin-top:3px;">💰 ₹${(t.purse-(t.spent||0)).toFixed(2)}Cr remaining / ₹${t.purse}Cr total</div>
+        <div style="font-size:.78rem;color:var(--muted);margin-top:2px;">${t.players.length} players in squad</div>
+      </div>
+    </div>`;
+
+  const RCL2 = { Batsman:'rb-bat', Bowler:'rb-bowl', 'All-Rounder':'rb-all', 'Wicket-Keeper':'rb-wk' };
+  document.getElementById('team-detail-players').innerHTML = !t.players.length
+    ? '<div style="text-align:center;color:var(--muted);padding:28px;">No players acquired</div>'
+    : `<div style="display:flex;flex-direction:column;gap:0;">
+        ${t.players.map((p,i)=>`
+          <div style="display:flex;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid rgba(255,255,255,.04);">
+            <div style="color:var(--muted);font-size:.75rem;width:20px;">${i+1}</div>
+            <div class="pl-avatar" style="width:42px;height:42px;">${p.photo_path?`<img src="${p.photo_path}">`:'🏏'}</div>
+            <div style="flex:1;">
+              <div style="font-family:'Rajdhani',sans-serif;font-size:.98rem;font-weight:700;">${p.name} ${p.status==='retained'?'<span class="badge badge-retained">RETAINED</span>':''}</div>
+              <div style="font-size:.74rem;color:var(--muted);">
+                <span class="role-badge ${RCL2[p.role]||'rb-bat'}" style="font-size:.66rem;">${p.role}</span>
+                · Age ${p.age||'—'} · ${p.nationality||''}
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-family:'Orbitron',monospace;font-size:.85rem;color:var(--green);">${p.status==='retained'?'🔒':`₹${(p.sold_price||0).toFixed(2)}Cr`}</div>
+              <div style="font-size:.7rem;color:var(--muted);">${p.status==='retained'?'Retained':'Auction'}</div>
+            </div>
+          </div>`).join('')}
+      </div>`;
+
+  openModal('team-modal');
+}
+
+async function loadHistory() {
+  const r = await fetch(`/api/auctions/${AID}/history`);
+  const { history } = await r.json();
+  const evtColor = { PLAYER_SOLD:'var(--green)', PLAYER_UNSOLD:'var(--red)', AUCTION_CREATED:'var(--cyan)', AUCTION_COMPLETE:'var(--gold)', RESHUFFLE:'var(--purple)', TEAM_ADDED:'var(--cyan)', PLAYER_ADDED:'var(--muted)', CSV_IMPORT:'var(--purple)', STATUS_CHANGE:'var(--gold)' };
+
+  document.getElementById('history-tbody').innerHTML = history.map((h,i)=>`
+    <tr>
+      <td style="color:var(--muted);">${i+1}</td>
+      <td style="color:var(--muted);font-size:.78rem;">${new Date(h.event_time).toLocaleTimeString()}</td>
+      <td><span style="color:${evtColor[h.event_type]||'var(--text)'};font-family:'Orbitron',monospace;font-size:.7rem;">${h.event_type}</span></td>
+      <td>${h.description||'—'}</td>
+      <td style="color:var(--text);">${h.player_name||'—'}</td>
+      <td style="color:var(--cyan);">${h.team_name||'—'}</td>
+      <td style="color:var(--green);font-family:'Orbitron',monospace;font-size:.78rem;">${h.amount?`₹${h.amount}Cr`:'—'}</td>
+    </tr>`).join('');
+  openModal('history-modal');
+}
+
+function printResults() { window.print(); }
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-bg').forEach(o => o.addEventListener('click', e => { if(e.target===o) o.classList.remove('open'); }));
+
+function showToast(msg) {
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+loadResults();
+</script>
+</body>
+</html>

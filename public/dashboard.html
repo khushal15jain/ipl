@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — IPL Auction</title>
+<link rel="stylesheet" href="/css/main.css">
+</head>
+<body class="page">
+
+<div class="topbar">
+  <div class="logo">IPL <span>AUCTION</span></div>
+  <div class="nav-user">
+    <div><div class="nav-name" id="uname">—</div><div class="nav-email" id="uemail">—</div></div>
+    <div class="avatar" id="uavatar">?</div>
+    <a href="/logout" class="btn btn-outline btn-sm">LOGOUT</a>
+  </div>
+</div>
+
+<div class="db-bar">
+  <div class="db-dot"></div><span style="color:#00FF88;font-family:'Orbitron',monospace;font-size:.68rem;">SQLite CONNECTED</span>
+  <span id="db-stats">Loading...</span>
+  <span style="margin-left:auto;"></span>
+  <span style="font-size:.68rem;">📂 DB: <code style="background:rgba(0,0,0,.4);padding:1px 6px;border-radius:4px;color:#FFD700;">auction.db</code></span>
+</div>
+
+<div class="container">
+  <!-- Welcome -->
+  <div class="card card-gold mb16" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:24px;">
+    <div>
+      <div style="font-family:'Orbitron',monospace;font-size:1.5rem;color:#FFD700;margin-bottom:6px;">🏟️ AUCTION COMMAND CENTER</div>
+      <div style="color:var(--muted);font-size:.88rem;">Create and run IPL-style cricket auctions with real SQLite database</div>
+    </div>
+    <a href="/create" class="btn btn-gold">＋ NEW AUCTION</a>
+  </div>
+
+  <!-- Quick actions -->
+  <div class="grid-3 mb16" style="margin-bottom:24px;">
+    <div class="card" style="text-align:center;cursor:pointer;" onclick="location.href='/create'">
+      <div style="font-size:2.4rem;margin-bottom:12px;">🏗️</div>
+      <div style="font-family:'Orbitron',monospace;font-size:.95rem;color:var(--cyan);margin-bottom:8px;">CREATE AUCTION</div>
+      <div style="color:var(--muted);font-size:.82rem;">Set up teams, players, purse config</div>
+    </div>
+    <div class="card" style="text-align:center;cursor:pointer;" onclick="loadAuctions()">
+      <div style="font-size:2.4rem;margin-bottom:12px;">⚡</div>
+      <div style="font-family:'Orbitron',monospace;font-size:.95rem;color:var(--cyan);margin-bottom:8px;">MY AUCTIONS</div>
+      <div style="color:var(--muted);font-size:.82rem;">Resume, start, or view results</div>
+    </div>
+    <div class="card" style="text-align:center;cursor:pointer;" onclick="location.href='/create'">
+      <div style="font-size:2.4rem;margin-bottom:12px;">📊</div>
+      <div style="font-family:'Orbitron',monospace;font-size:.95rem;color:var(--cyan);margin-bottom:8px;">CSV IMPORT</div>
+      <div style="color:var(--muted);font-size:.82rem;">Bulk import players via CSV + images</div>
+    </div>
+  </div>
+
+  <!-- Auctions list -->
+  <div class="card card-accent">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div class="section-title" style="margin-bottom:0;">📋 YOUR AUCTIONS</div>
+      <button class="btn btn-outline btn-sm" onclick="loadAuctions()">↺ REFRESH</button>
+    </div>
+    <div id="auctions-list">
+      <div style="text-align:center;padding:40px;color:var(--muted);">
+        <div style="font-size:2rem;margin-bottom:12px;">📭</div>
+        <div>Loading auctions...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+async function loadUser() {
+  const r = await fetch('/api/auth/me');
+  if (!r.ok) { location.href = '/login'; return; }
+  const { user } = await r.json();
+  document.getElementById('uname').textContent  = user.name;
+  document.getElementById('uemail').textContent = user.email;
+  document.getElementById('uavatar').textContent = user.name[0].toUpperCase();
+}
+
+async function loadStats() {
+  const r = await fetch('/api/db/stats');
+  const d = await r.json();
+  document.getElementById('db-stats').textContent =
+    ` · Users: ${d.users} · Auctions: ${d.auctions} · Teams: ${d.teams} · Players: ${d.players} · Bids: ${d.bids} · History: ${d.history}`;
+}
+
+async function loadAuctions() {
+  const r = await fetch('/api/auctions');
+  const { auctions } = await r.json();
+  const el = document.getElementById('auctions-list');
+  if (!auctions.length) {
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);"><div style="font-size:2rem;margin-bottom:12px;">📭</div><div>No auctions yet — create your first one!</div></div>';
+    return;
+  }
+  const statusColor = { draft:'var(--muted)', live:'var(--red)', completed:'var(--green)' };
+  el.innerHTML = auctions.map(a => `
+    <div class="auction-row">
+      <div>
+        <div style="font-family:'Rajdhani',sans-serif;font-size:1.05rem;font-weight:700;">🏏 ${a.name} <span style="color:var(--muted);font-size:.78rem;">(${a.season})</span></div>
+        <div style="font-size:.76rem;color:var(--muted);margin-top:3px;">${a.team_count} teams · ${a.player_count} players · ${a.sold_count} sold · Created ${new Date(a.created_at).toLocaleDateString()}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span class="badge badge-${a.status}">${a.status.toUpperCase()}</span>
+        ${a.status === 'completed' ? `<a href="/results/${a.id}" class="btn btn-outline btn-sm">🏆 RESULTS</a>` : ''}
+        ${a.status !== 'completed' ? `<a href="/auction/${a.id}" class="btn btn-red btn-sm">▶ ${a.status==='live'?'RESUME':'START'}</a>` : ''}
+        <button class="del-btn" onclick="deleteAuction(${a.id},this)" title="Delete">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function deleteAuction(id, btn) {
+  if (!confirm('Delete this auction and all its data from the database?')) return;
+  btn.disabled = true;
+  await fetch(`/api/auctions/${id}`, { method:'DELETE' });
+  showToast('Auction deleted from database.');
+  loadAuctions(); loadStats();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+loadUser(); loadAuctions(); loadStats();
+</script>
+</body>
+</html>
