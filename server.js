@@ -19,6 +19,11 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Public viewer routes (no auth required)
+app.get('/join', (req, res) => res.sendFile('join.html', { root: './public' }));
+app.get('/watch/:id', (req, res) => res.sendFile('watch.html', { root: './public' }));
+app.get('/audience/:id', (req, res) => res.sendFile('audience.html', { root: './public' }));
+
 // ── Routes ───────────────────────────────────────────────────────────────────
 app.use('/', require('./routes/auth'));
 app.use('/', require('./routes/auction'));
@@ -30,10 +35,6 @@ app.get('/auction/:id', authMiddleware, (req, res) => res.sendFile('auction.html
 app.get('/results/:id', authMiddleware, (req, res) => res.sendFile('results.html', { root: './public' }));
 app.get('/create', authMiddleware, (req, res) => res.sendFile('create.html', { root: './public' }));
 app.get('/logout', (req, res) => { res.clearCookie('token'); res.redirect('/login'); });
-// Public viewer routes (no auth required)
-app.get('/join', (req, res) => res.sendFile('join.html', { root: './public' }));
-app.get('/watch/:id', (req, res) => res.sendFile('watch.html', { root: './public' }));
-app.get('/audience/:id', (req, res) => res.sendFile('audience.html', { root: './public' }));
 
 // ── Socket.io — Real-time bidding ────────────────────────────────────────────
 // auctionId → { currentPlayer, currentBid, currentBidder, reshuffleCount }
@@ -94,13 +95,17 @@ io.on('connection', (socket) => {
         pending_count: pendingRes.rowCount,
         sold_count: parseInt(soldRes.rows[0].c),
         unsold_count: parseInt(unsoldRes.rows[0].c),
-        room: auctionRooms[auctionId] || null,
+        room: auctionRooms[auctionId] || { started: false, currentPlayer: null },
         soldPlayers: soldPlayersRes.rows,
       });
-      console.log(`📺 Joined auction room ${auctionId} ${teamId ? `as team ${teamId}` : '(Admin/Viewer)'}`);
+
+      console.log(`📺 Auction ${auctionId} Sync: ${teamsRes.rowCount} teams, ${pendingRes.rowCount} pending players.`);
+      if (teamId) console.log(`👉 Joined as Team: ${teamId}`);
+      else console.log(`👀 Joined as Spectator`);
+
     } catch (err) {
-      console.error(err);
-      socket.emit('error', { message: 'Database error' });
+      console.error('❌ Socket Join Error:', err);
+      socket.emit('error', { message: 'Database error while joining auction' });
     }
   });
 

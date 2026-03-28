@@ -121,20 +121,39 @@
 </div>
 
 <script>
-const AID = location.pathname.split('/').pop();
+const pathParts = location.pathname.split('/').filter(Boolean);
+const AID = parseInt(pathParts[pathParts.length - 1]);
 const socket = io();
+
+console.log('🔗 Connecting to spectator feed for Auction ID:', AID);
 
 let teams = [], currentBid = 0, currentBidder = null;
 let cdInterval = null, cdVal = 30;
 let teamPlayerCounts = {};
 let maxPlayersPerTeam = 11;
 
-// Join as audience (no teamId)
-socket.emit('join_auction', { auctionId: parseInt(AID) });
+if (isNaN(AID)) {
+  console.error('❌ Invalid Auction ID');
+  document.getElementById('st-name').textContent = 'Invalid Auction ID. Please check the URL.';
+} else {
+  // Join as audience (no teamId)
+  socket.emit('join_auction', { auctionId: AID });
+}
+
+socket.on('connect', () => console.log('✅ Socket connected!'));
+socket.on('connect_error', (err) => console.error('🔌 Socket error:', err));
+socket.on('error', (err) => {
+  console.error('🚫 App Error:', err);
+  document.getElementById('st-name').textContent = err.message || 'Error joining auction';
+});
 
 socket.on('auction_state', (state) => {
+  console.log('📊 Received Auction State:', state);
   teams = state.teams;
-  if (state.auction) maxPlayersPerTeam = state.auction.max_players_per_team || 11;
+  if (state.auction) {
+    maxPlayersPerTeam = state.auction.max_players_per_team || 11;
+    document.title = `${state.auction.name} — Live Audience`;
+  }
   if (state.playerCounts) teamPlayerCounts = state.playerCounts;
   
   document.getElementById('sb-sold').textContent = state.sold_count;
@@ -142,6 +161,9 @@ socket.on('auction_state', (state) => {
   
   if (state.room && state.room.currentPlayer) {
       handlePlayerUp(state.room.currentPlayer, state.room.currentBid, state.room.currentBidder);
+  } else {
+      document.getElementById('st-name').textContent = 'WAITING FOR AUCTIONEER...';
+      document.getElementById('st-cur-bid').textContent = 'The auction hasn\'t started yet.';
   }
   
   renderTeams();
