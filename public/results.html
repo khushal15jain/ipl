@@ -11,7 +11,7 @@
   <div class="logo">IPL <span>AUCTION</span></div>
   <div style="display:flex;gap:10px;">
     <button class="btn btn-outline btn-sm" onclick="printResults()">🖨️ PRINT</button>
-    <a href="/dashboard" class="btn btn-outline btn-sm">← DASHBOARD</a>
+    <a href="/dashboard" id="dash-btn" class="btn btn-outline btn-sm">← DASHBOARD</a>
   </div>
 </div>
 
@@ -64,6 +64,11 @@ async function loadResults() {
   const r = await fetch(`/api/auctions/${AID}/results`);
   if (!r.ok) { document.getElementById('result-sub').textContent = 'Error loading results'; return; }
   const { auction, teams, stats } = await r.json();
+
+  // Hide dashboard button for guests (audience)
+  fetch('/api/auth/me').then(res => {
+    if (!res.ok) document.getElementById('dash-btn').style.display = 'none';
+  });
 
   document.title = `Results — ${auction.name}`;
   document.getElementById('result-sub').textContent = `${auction.name} · ${auction.season} · ${teams.length} teams`;

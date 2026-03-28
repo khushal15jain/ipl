@@ -17,12 +17,13 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
+app.get('/logout', (req, res) => { res.clearCookie('token'); res.redirect('/login'); });
 
 // Public viewer routes (no auth required)
 app.get('/join', (req, res) => res.sendFile('join.html', { root: './public' }));
 app.get('/watch/:id', (req, res) => res.sendFile('watch.html', { root: './public' }));
 app.get('/audience/:id', (req, res) => res.sendFile('audience.html', { root: './public' }));
+app.get('/results/:id', (req, res) => res.sendFile('results.html', { root: './public' }));
 
 // ── Routes ───────────────────────────────────────────────────────────────────
 app.use('/', require('./routes/auth'));
@@ -32,9 +33,7 @@ app.use('/', require('./routes/auction'));
 app.get('/', (req, res) => res.redirect('/login'));
 app.get('/dashboard', authMiddleware, (req, res) => res.sendFile('dashboard.html', { root: './public' }));
 app.get('/auction/:id', authMiddleware, (req, res) => res.sendFile('auction.html', { root: './public' }));
-app.get('/results/:id', authMiddleware, (req, res) => res.sendFile('results.html', { root: './public' }));
 app.get('/create', authMiddleware, (req, res) => res.sendFile('create.html', { root: './public' }));
-app.get('/logout', (req, res) => { res.clearCookie('token'); res.redirect('/login'); });
 
 // ── Socket.io — Real-time bidding ────────────────────────────────────────────
 // auctionId → { currentPlayer, currentBid, currentBidder, reshuffleCount }

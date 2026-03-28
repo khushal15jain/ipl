@@ -245,6 +245,11 @@ socket.on('player_unsold', ({ player, unsold_count }) => {
   }, 2500);
 });
 
+socket.on('auction_complete', () => {
+  showToast('🏆 Auction Complete! Redirecting to results...');
+  setTimeout(() => location.href = `/results/${AID}`, 3000);
+});
+
 socket.on('bid_error', ({ error }) => {
   showToast(`⚠️ ${error}`);
   refreshMyBidButton();

@@ -230,6 +230,10 @@ socket.on('player_unsold', ({ player, unsold_count }) => {
   }, 2500);
 });
 
+socket.on('auction_complete', () => {
+  setTimeout(() => location.href = `/results/${AID}`, 3000);
+});
+
 function renderTeams() {
   const list = document.getElementById('teams-list');
   list.innerHTML = teams.map(t => {
