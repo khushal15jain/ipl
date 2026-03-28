@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Audience — IPL Auction</title>
+<link rel="stylesheet" href="/css/main.css">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  .audience-badge {
+    background: linear-gradient(135deg, rgba(255, 68, 68, 0.15), rgba(255, 142, 0, 0.15));
+    border: 1px solid rgba(255, 68, 68, 0.3);
+    border-radius: 50px;
+    padding: 6px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.8rem;
+    color: #fff;
+    box-shadow: 0 0 15px rgba(255, 68, 68, 0.1);
+  }
+  .audience-badge .dot {
+    width: 8px; height: 8px; background: #FF4444; border-radius: 50%;
+    box-shadow: 0 0 8px #FF4444;
+    animation: flash 1.2s infinite;
+  }
+  @keyframes flash { 0% { opacity: 0.2; } 50% { opacity: 1; } 100% { opacity: 0.2; } }
+  
+  .team-row {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.3s ease;
+  }
+  .team-row.highest {
+    background: rgba(0, 255, 136, 0.08);
+    border-color: rgba(0, 255, 136, 0.4);
+    box-shadow: inset 0 0 15px rgba(0, 255, 136, 0.05);
+  }
+</style>
+</head>
+<body class="page">
+
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:16px;">
+    <div class="logo">IPL <span>AUCTION</span></div>
+    <div class="audience-badge">
+      <div class="dot"></div>
+      <span>🔴 LIVE SPECTATOR</span>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <div class="scorebug">
+      <div class="sb-item"><div class="sb-val" id="sb-sold">0</div><div class="sb-lbl">SOLD</div></div>
+      <div class="sb-item"><div class="sb-val" id="sb-rem">0</div><div class="sb-lbl">REMAINING</div></div>
+    </div>
+    <a href="/join" class="btn btn-outline btn-sm">EXIT</a>
+  </div>
+</div>
+
+<div class="auction-layout">
+  <!-- LEFT: Broadcast Stage -->
+  <div class="stage">
+    <div style="display:flex;gap:12px;margin-bottom:16px;justify-content:center;">
+      <div class="stat-chip"><div class="val countdown" id="countdown">30</div><div class="lbl">TIMER</div></div>
+      <div class="stat-chip"><div class="val" id="st-bid" style="color:var(--green);">₹ 0Cr</div><div class="lbl">CURRENT BID</div></div>
+    </div>
+
+    <div class="player-card" id="player-card">
+      <div class="player-photo" id="st-photo">🏏</div>
+      <div class="player-name" id="st-name">Waiting for auctioneer...</div>
+      <div class="player-meta">
+        <span class="role-badge rb-bat" id="st-role">—</span>
+        <span style="color:var(--muted);font-size:.83rem;" id="st-age">Age: —</span>
+      </div>
+      <div class="base-box">
+        <div class="label">Base Price</div>
+        <div class="price" id="st-base">₹ —</div>
+      </div>
+      <div class="cur-bid" id="st-cur-bid">Bidding in progress...</div>
+    </div>
+
+    <div style="margin-top:20px;width:100%;max-width:400px;margin-left:auto;margin-right:auto;">
+      <div class="prog-wrap">
+        <div class="prog-labels"><span id="prog-lbl">Progress</span><span id="prog-pct">0%</span></div>
+        <div class="prog-track"><div class="prog-bar" id="prog-bar" style="width:0%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Standings & Feed -->
+  <div class="bid-panel">
+    <div class="panel-hdr">
+      <h3>🏟️ TOURNAMENT SQUADS</h3>
+    </div>
+    
+    <div class="teams-list" id="teams-list" style="display:flex; flex-direction:column; gap:8px;">
+      <!-- Teams populated here -->
+    </div>
+    
+    <div class="bid-log">
+      <div class="bid-log-title">📋 Broadcast Log</div>
+      <div id="bid-entries"></div>
+    </div>
+  </div>
+</div>
+
+<!-- SOLD OVERLAY -->
+<div class="sold-overlay" id="sold-overlay">
+  <div class="confetti-wrap" id="confetti-wrap"></div>
+  <div class="sold-word" id="sold-word">SOLD!</div>
+  <div style="text-align:center;">
+    <div style="font-family:'Rajdhani',sans-serif;font-size:1.8rem;font-weight:700;" id="sold-pname">—</div>
+    <div style="font-family:'Orbitron',monospace;font-size:1.2rem;color:var(--green);margin-top:8px;" id="sold-price">₹ 0Cr</div>
+    <div style="font-family:'Rajdhani',sans-serif;font-size:1.1rem;color:var(--cyan);margin-top:5px;" id="sold-team">—</div>
+  </div>
+</div>
+
+<script>
+const AID = location.pathname.split('/').pop();
+const socket = io();
+
+let teams = [], currentBid = 0, currentBidder = null;
+let cdInterval = null, cdVal = 30;
+let teamPlayerCounts = {};
+let maxPlayersPerTeam = 11;
+
+// Join as audience (no teamId)
+socket.emit('join_auction', { auctionId: parseInt(AID) });
+
+socket.on('auction_state', (state) => {
+  teams = state.teams;
+  if (state.auction) maxPlayersPerTeam = state.auction.max_players_per_team || 11;
+  if (state.playerCounts) teamPlayerCounts = state.playerCounts;
+  
+  document.getElementById('sb-sold').textContent = state.sold_count;
+  document.getElementById('sb-rem').textContent = state.pending_count;
+  
+  if (state.room && state.room.currentPlayer) {
+      handlePlayerUp(state.room.currentPlayer, state.room.currentBid, state.room.currentBidder);
+  }
+  
+  renderTeams();
+});
+
+socket.on('player_up', ({ player, base_price }) => {
+  handlePlayerUp(player, base_price, null);
+});
+
+function handlePlayerUp(player, price, bidderId) {
+  currentBid = price;
+  currentBidder = bidderId;
+  
+  const photo = document.getElementById('st-photo');
+  if (player.photo_path) photo.innerHTML = `<img src="${player.photo_path}" alt="${player.name}">`;
+  else photo.textContent = '🏏';
+
+  document.getElementById('st-name').textContent = player.name;
+  document.getElementById('st-role').textContent = player.role;
+  document.getElementById('st-age').textContent = `Age: ${player.age||'—'}`;
+  document.getElementById('st-base').textContent = `₹${player.base_price}Cr`;
+  document.getElementById('st-bid').textContent = `₹${price}Cr`;
+  
+  const bidderName = bidderId ? (teams.find(t => t.id === bidderId)?.name || 'Bidder') : 'No bids yet';
+  document.getElementById('st-cur-bid').textContent = bidderId ? `${bidderName}: ₹${price}Cr` : 'Waiting for openers...';
+  
+  document.getElementById('bid-entries').innerHTML = '';
+  startCountdown();
+  renderTeams();
+}
+
+socket.on('bid_placed', ({ teamId, teamName, bidAmount }) => {
+  currentBid = bidAmount;
+  currentBidder = teamId;
+  document.getElementById('st-cur-bid').textContent = `${teamName}: ₹${bidAmount}Cr`;
+  document.getElementById('st-bid').textContent = `₹${bidAmount}Cr`;
+  
+  addBidLog(`${teamName}: ₹${bidAmount}Cr`);
+  startCountdown();
+  renderTeams();
+});
+
+socket.on('player_sold', ({ player, team, price, sold_count, playerCounts }) => {
+  if (playerCounts) teamPlayerCounts = playerCounts;
+  document.getElementById('sb-sold').textContent = sold_count;
+  clearInterval(cdInterval);
+  showOverlay('SOLD!', player.name, `₹${price}Cr`, team.name, true);
+  confetti();
+  
+  setTimeout(() => {
+    hideOverlay();
+    document.getElementById('st-name').textContent = 'Waiting for next player...';
+    renderTeams();
+  }, 2800);
+});
+
+socket.on('player_unsold', ({ player, unsold_count }) => {
+  document.getElementById('sb-unsold') && (document.getElementById('sb-unsold').textContent = unsold_count);
+  clearInterval(cdInterval);
+  showOverlay('UNSOLD', player.name, '', '', false);
+  setTimeout(() => {
+    hideOverlay();
+    document.getElementById('st-name').textContent = 'Waiting for next player...';
+  }, 2500);
+});
+
+function renderTeams() {
+  const list = document.getElementById('teams-list');
+  list.innerHTML = teams.map(t => {
+    const squadCount = teamPlayerCounts[t.id] || 0;
+    const isHigh = t.id === currentBidder;
+    return `
+    <div class="team-row ${isHigh?'highest':''}">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="mini-logo">${t.logo_path?`<img src="${t.logo_path}">`:(t.emoji||'🏏')}</div>
+        <div>
+          <div style="font-family:'Rajdhani',sans-serif;font-size:.92rem;font-weight:700;">${t.name}</div>
+          <div style="font-size:.7rem;color:var(--muted);">Budget: ₹${(t.purse-t.spent).toFixed(2)}Cr &nbsp;·&nbsp; Squad: ${squadCount}/${maxPlayersPerTeam}</div>
+        </div>
+      </div>
+      <div>
+        ${isHigh ? '<span class="live-dot" style="background:#00FF88;box-shadow:0 0 10px #00FF88;"></span>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function startCountdown() {
+  cdVal = 30;
+  document.getElementById('countdown').textContent = cdVal;
+  clearInterval(cdInterval);
+  cdInterval = setInterval(() => {
+    cdVal--;
+    document.getElementById('countdown').textContent = cdVal;
+    if (cdVal <= 0) clearInterval(cdInterval);
+  }, 1000);
+}
+
+function addBidLog(text) {
+  const el = document.createElement('div');
+  el.className = 'blog-entry';
+  el.innerHTML = `<div class="blog-dot"></div>${text}`;
+  const parent = document.getElementById('bid-entries');
+  parent.insertBefore(el, parent.firstChild);
+}
+
+function showOverlay(word, name, price, team, isSold) {
+  document.getElementById('sold-word').textContent = word;
+  document.getElementById('sold-word').style.color = isSold ? 'var(--gold)' : 'var(--red)';
+  document.getElementById('sold-pname').textContent = name;
+  document.getElementById('sold-price').textContent = price;
+  document.getElementById('sold-team').textContent = team;
+  document.getElementById('sold-overlay').classList.add('show');
+}
+function hideOverlay() { document.getElementById('sold-overlay').classList.remove('show'); }
+
+function confetti() {
+  const wrap = document.getElementById('confetti-wrap'); wrap.innerHTML='';
+  for(let i=0;i<40;i++){
+    const el=document.createElement('div'); el.className='cp';
+    el.style.cssText=`left:${Math.random()*100}%;top:-20px;background:hsl(${Math.random()*360},70%,50%);width:10px;height:10px;border-radius:50%;animation:fall ${Math.random()*2+2}s linear forwards;`;
+    wrap.appendChild(el);
+  }
+}
+</script>
+
+<style>
+  @keyframes fall { to { transform: translateY(100vh) rotate(360deg); opacity: 0; } }
+  .cp { position: absolute; pointer-events: none; }
+</style>
+
+</body>
+</html>

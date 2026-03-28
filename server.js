@@ -33,6 +33,7 @@ app.get('/logout', (req, res) => { res.clearCookie('token'); res.redirect('/logi
 // Public viewer routes (no auth required)
 app.get('/join', (req, res) => res.sendFile('join.html', { root: './public' }));
 app.get('/watch/:id', (req, res) => res.sendFile('watch.html', { root: './public' }));
+app.get('/audience/:id', (req, res) => res.sendFile('audience.html', { root: './public' }));
 
 // ── Socket.io — Real-time bidding ────────────────────────────────────────────
 // auctionId → { currentPlayer, currentBid, currentBidder, reshuffleCount }
