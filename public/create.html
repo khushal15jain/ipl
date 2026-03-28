@@ -54,7 +54,10 @@
     <div class="card card-accent" style="margin-bottom:16px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
         <div class="section-title" style="margin:0;">🏟️ Teams (<span id="tc">0</span> / <span id="tmax">8</span>)</div>
-        <button class="btn btn-gold btn-sm" id="add-team-btn" onclick="openTeamModal()">＋ ADD TEAM</button>
+        <div class="flex gap12 wrap">
+          <button class="btn btn-gold btn-sm" id="add-team-btn" onclick="openTeamModal()">＋ ADD TEAM</button>
+          <button class="btn btn-purple btn-sm" onclick="openTeamCsvModal()">📥 IMPORT CSV</button>
+        </div>
       </div>
       <div class="grid-auto" id="teams-grid">
         <div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--muted);">
@@ -170,6 +173,66 @@
   </div>
 </div>
 
+<!-- ── EDIT TEAM MODAL ── -->
+<div class="modal-bg" id="edit-team-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('edit-team-modal')">✕</button>
+    <h3>✏️ EDIT TEAM</h3>
+    <input type="hidden" id="etm-id">
+    <div class="form-group"><label>Team Name *</label><input type="text" id="etm-name"></div>
+    <div class="form-group">
+      <label>Team Logo (optional)</label>
+      <div class="file-zone" id="etm-logo-zone">
+        <input type="file" accept="image/*" id="etm-logo-inp" onchange="previewFile(event,'etm-logo-prev','etm-logo-zone')">
+        <span id="etm-logo-prev"><span class="fz-icon">🏏</span><p>Click to change logo</p></span>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group"><label>Captain Name</label><input type="text" id="etm-cap"></div>
+      <div class="form-group"><label>Retained Player</label><input type="text" id="etm-ret"></div>
+    </div>
+    <div class="form-group"><label>Emoji</label><input type="text" id="etm-emoji"></div>
+    <button class="btn btn-gold btn-full mt16" onclick="submitEditTeam()">✓ UPDATE TEAM</button>
+  </div>
+</div>
+
+<!-- ── EDIT PLAYER MODAL ── -->
+<div class="modal-bg" id="edit-player-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('edit-player-modal')">✕</button>
+    <h3>✏️ EDIT PLAYER</h3>
+    <input type="hidden" id="epm-id">
+    <div class="form-group"><label>Player Name *</label><input type="text" id="epm-name"></div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label>Role</label>
+        <select id="epm-role">
+          <option value="Batsman">🏏 Batsman</option>
+          <option value="Bowler">🎳 Bowler</option>
+          <option value="All-Rounder">⭐ All-Rounder</option>
+          <option value="Wicket-Keeper">🧤 Wicket-Keeper</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Age *</label><input type="number" id="epm-age"></div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label>Base Price (₹ Cr)</label>
+        <input type="number" id="epm-base" step="0.05">
+      </div>
+      <div class="form-group"><label>Nationality</label><input type="text" id="epm-nat"></div>
+    </div>
+    <div class="form-group">
+      <label>Player Photo (optional)</label>
+      <div class="file-zone">
+        <input type="file" accept="image/*" id="epm-photo-inp" onchange="previewFile(event,'epm-photo-prev','epm-photo-zone')">
+        <span id="epm-photo-prev"><span class="fz-icon">🧑</span><p>Click to change photo</p></span>
+      </div>
+    </div>
+    <button class="btn btn-green btn-full mt16" onclick="submitEditPlayer()">✓ UPDATE PLAYER</button>
+  </div>
+</div>
+
 <!-- ── CSV IMPORT MODAL ── -->
 <div class="modal-bg" id="csv-modal">
   <div class="modal modal-wide">
@@ -217,6 +280,30 @@
     <div class="success-msg" id="csv-ok"></div>
 
     <button class="btn btn-purple btn-full mt16" onclick="submitCSV()" id="csv-submit-btn">📥 IMPORT PLAYERS</button>
+  </div>
+</div>
+
+<!-- ── TEAM CSV IMPORT MODAL ── -->
+<div class="modal-bg" id="team-csv-modal">
+  <div class="modal modal-wide">
+    <button class="modal-close" onclick="closeModal('team-csv-modal')">✕</button>
+    <h3>📥 IMPORT TEAMS VIA CSV</h3>
+    <div class="csv-info" style="margin-bottom:20px;">
+      <div style="font-family:'Orbitron',monospace;font-size:.75rem;color:var(--cyan);margin-bottom:10px;">📋 TEAM CSV FORMAT:</div>
+      <code>name, captain, retained_player, emoji, logo_filename</code>
+      <button class="btn btn-outline btn-sm mt16" onclick="downloadTeamSampleCSV()" style="font-size:.75rem;">⬇ DOWNLOAD SAMPLE CSV</button>
+    </div>
+    <div class="form-group">
+      <label>Upload CSV File *</label>
+      <div class="file-zone"><input type="file" accept=".csv" id="team-csv-file-inp"><span id="team-csv-file-prev">📄 Select CSV</span></div>
+    </div>
+    <div class="form-group">
+      <label>Upload Logos (optional)</label>
+      <div class="file-zone"><input type="file" accept="image/*" id="team-csv-logos-inp" multiple><span id="team-csv-logos-prev">🖼️ Select Logos</span></div>
+    </div>
+    <div id="team-csv-err" class="error-msg"></div>
+    <div id="team-csv-ok" class="success-msg"></div>
+    <button class="btn btn-purple btn-full mt16" id="team-csv-btn" onclick="submitTeamCSV()">📥 IMPORT TEAMS</button>
   </div>
 </div>
 
@@ -308,8 +395,35 @@ async function loadTeams() {
       <h4>${t.name}</h4>
       <p>👑 ${t.captain||'—'}</p>
       ${t.retained_player?`<p style="color:var(--gold);font-size:.72rem;margin-top:2px;">🔒 ${t.retained_player}</p>`:''}
-      <button class="del-btn mt8" onclick="deleteTeam(${t.id})">✕</button>
+      <div class="flex gap8 center mt8">
+        <button class="btn btn-outline btn-sm" style="padding:4px 8px;min-width:auto;" onclick='editTeam(${JSON.stringify(t).replace(/'/g, "&apos;")})'>✏️</button>
+        <button class="del-btn" style="position:static;margin:0;" onclick="deleteTeam(${t.id})">✕</button>
+      </div>
     </div>`).join('');
+}
+
+function editTeam(t) {
+  document.getElementById('etm-id').value = t.id;
+  document.getElementById('etm-name').value = t.name;
+  document.getElementById('etm-cap').value = t.captain || '';
+  document.getElementById('etm-ret').value = t.retained_player || '';
+  document.getElementById('etm-emoji').value = t.emoji || '';
+  document.getElementById('etm-logo-prev').innerHTML = t.logo_path ? `<img src="${t.logo_path}" class="fz-preview">` : '<span class="fz-icon">🏏</span><p>Click to change logo</p>';
+  openModal('edit-team-modal');
+}
+
+async function submitEditTeam() {
+  const id = document.getElementById('etm-id').value;
+  const fd = new FormData();
+  fd.append('name', document.getElementById('etm-name').value);
+  fd.append('captain', document.getElementById('etm-cap').value);
+  fd.append('retained_player', document.getElementById('etm-ret').value);
+  fd.append('emoji', document.getElementById('etm-emoji').value);
+  const logo = document.getElementById('etm-logo-inp').files[0];
+  if (logo) fd.append('logo', logo);
+
+  const r = await fetch(`/api/teams/${id}`, { method:'PATCH', body:fd });
+  if (r.ok) { closeModal('edit-team-modal'); loadTeams(); showToast('Team updated!'); }
 }
 
 async function deleteTeam(id) {
@@ -373,8 +487,37 @@ async function loadPlayers() {
       <td style="color:var(--muted);font-size:.82rem;">${p.nationality||'—'}</td>
       <td>${p.photo_path?`<img src="${p.photo_path}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">`:'—'}</td>
       <td><span class="badge ${p.source==='csv'?'badge-live':'badge-draft'}">${p.source.toUpperCase()}</span></td>
-      <td style="text-align:right;"><button class="del-btn" onclick="deletePlayer(${p.id})">✕</button></td>
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="btn btn-outline btn-sm" style="padding:4px 8px;margin-right:4px;" onclick='editPlayer(${JSON.stringify(p).replace(/'/g, "&apos;")})'>✏️</button>
+        <button class="del-btn" style="position:static;margin:0;" onclick="deletePlayer(${p.id})">✕</button>
+      </td>
     </tr>`).join('');
+}
+
+function editPlayer(p) {
+  document.getElementById('epm-id').value = p.id;
+  document.getElementById('epm-name').value = p.name;
+  document.getElementById('epm-role').value = p.role;
+  document.getElementById('epm-age').value = p.age;
+  document.getElementById('epm-base').value = p.base_price;
+  document.getElementById('epm-nat').value = p.nationality;
+  document.getElementById('epm-photo-prev').innerHTML = p.photo_path ? `<img src="${p.photo_path}" class="fz-preview">` : '<span class="fz-icon">🧑</span><p>Click to change photo</p>';
+  openModal('edit-player-modal');
+}
+
+async function submitEditPlayer() {
+  const id = document.getElementById('epm-id').value;
+  const fd = new FormData();
+  fd.append('name', document.getElementById('epm-name').value);
+  fd.append('role', document.getElementById('epm-role').value);
+  fd.append('age', document.getElementById('epm-age').value);
+  fd.append('base_price', document.getElementById('epm-base').value);
+  fd.append('nationality', document.getElementById('epm-nat').value);
+  const photo = document.getElementById('epm-photo-inp').files[0];
+  if (photo) fd.append('photo', photo);
+
+  const r = await fetch(`/api/players/${id}`, { method:'PATCH', body:fd });
+  if (r.ok) { closeModal('edit-player-modal'); loadPlayers(); showToast('Player updated!'); }
 }
 
 async function deletePlayer(id) {
@@ -433,6 +576,51 @@ function downloadSampleCSV() {
   a.download = 'sample_players.csv'; a.click();
 }
 
+// ── TEAM CSV ─────────────────────────────────────────────
+function openTeamCsvModal() {
+  if (!auctionId) return showToast('Create auction first!');
+  document.getElementById('team-csv-file-inp').value='';
+  document.getElementById('team-csv-logos-inp').value='';
+  document.getElementById('team-csv-file-prev').innerHTML='<span class="fz-icon">📄</span><p>Click to select your .csv file</p>';
+  document.getElementById('team-csv-logos-prev').innerHTML='<span class="fz-icon">🖼️</span><p>Select multiple logos</p>';
+  document.getElementById('team-csv-err').style.display='none';
+  document.getElementById('team-csv-ok').style.display='none';
+  openModal('team-csv-modal');
+}
+
+async function submitTeamCSV() {
+  const csv = document.getElementById('team-csv-file-inp').files[0];
+  if (!csv) return showToast('Select CSV');
+  const btn = document.getElementById('team-csv-btn');
+  btn.disabled = true; btn.textContent = '⏳ Importing...';
+
+  const fd = new FormData();
+  fd.append('csv', csv);
+  const logos = document.getElementById('team-csv-logos-inp').files;
+  for (let l of logos) fd.append('logos', l);
+
+  const r = await fetch(`/api/auctions/${auctionId}/teams/csv`, { method:'POST', body:fd });
+  const d = await r.json();
+  btn.disabled = false; btn.textContent = '📥 IMPORT TEAMS';
+
+  if (r.ok) {
+    document.getElementById('team-csv-ok').textContent = `✅ Imported ${d.imported} teams!`;
+    document.getElementById('team-csv-ok').style.display='block';
+    loadTeams(); loadPlayers();
+    setTimeout(() => closeModal('team-csv-modal'), 1500);
+  } else {
+    document.getElementById('team-csv-err').textContent = d.error;
+    document.getElementById('team-csv-err').style.display='block';
+  }
+}
+
+function downloadTeamSampleCSV() {
+  const csv = `name,captain,retained_player,emoji,logo_filename\nMumbai Indians,Hardik Pandya,Bumrah,🦁,mi.png\nChennai Super Kings,MS Dhoni,Jadeja,🦁,csk.png`;
+  const blob = new Blob([csv], { type:'text/csv' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'sample_teams.csv'; a.click();
+}
+
 // ── File preview ──────────────────────────────────────────
 function previewFile(e, previewId, zoneId) {
   const file = e.target.files[0]; if (!file) return;
@@ -441,22 +629,22 @@ function previewFile(e, previewId, zoneId) {
     document.getElementById(previewId).innerHTML = `<img src="${ev.target.result}" class="fz-preview">`;
   };
   reader.readAsDataURL(file);
-
-  // Update CSV/image zone labels
-  if (e.target.id === 'csv-file-inp') {
-    document.getElementById('csv-file-prev').innerHTML = `<span class="fz-icon">✅</span><p>${file.name}</p>`;
-  }
 }
 
-// Override for CSV file (no image preview)
+// File input change listeners
 document.addEventListener('change', e => {
-  if (e.target.id === 'csv-file-inp') {
-    const f = e.target.files[0];
-    if (f) document.getElementById('csv-file-prev').innerHTML = `<span class="fz-icon">✅</span><p>${f.name}</p>`;
+  const f = e.target.files[0];
+  if (e.target.id === 'csv-file-inp' && f) {
+    document.getElementById('csv-file-prev').innerHTML = `<span class="fz-icon">✅</span><p>${f.name}</p>`;
   }
   if (e.target.id === 'csv-images-inp') {
-    const count = e.target.files.length;
-    document.getElementById('csv-images-prev').innerHTML = `<span class="fz-icon">🖼️</span><p>${count} image(s) selected</p>`;
+    document.getElementById('csv-images-prev').innerHTML = `<span class="fz-icon">🖼️</span><p>${e.target.files.length} image(s)</p>`;
+  }
+  if (e.target.id === 'team-csv-file-inp' && f) {
+    document.getElementById('team-csv-file-prev').innerHTML = `<span class="fz-icon">✅</span><p>${f.name}</p>`;
+  }
+  if (e.target.id === 'team-csv-logos-inp') {
+    document.getElementById('team-csv-logos-prev').innerHTML = `<span class="fz-icon">🖼️</span><p>${e.target.files.length} logo(s)</p>`;
   }
 });
 

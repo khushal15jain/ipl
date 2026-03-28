@@ -237,6 +237,43 @@ router.post('/api/auctions/:id/teams', teamUpload.single('logo'), async (req, re
   }
 });
 
+// PATCH /api/teams/:teamId — update team details
+router.patch('/api/teams/:teamId', teamUpload.single('logo'), async (req, res) => {
+  try {
+    const { name, captain, retained_player, emoji } = req.body;
+    const teamId = req.params.teamId;
+
+    const result = await pool.query('SELECT * FROM teams WHERE id = $1', [teamId]);
+    const team = result.rows[0];
+    if (!team) return res.status(404).json({ error: 'Team not found' });
+
+    let logoPath = team.logo_path;
+    if (req.file) {
+      // Delete old logo if it exists
+      if (team.logo_path) {
+        const oldFile = path.join(__dirname, '../public', team.logo_path);
+        if (fs.existsSync(oldFile)) fs.unlinkSync(oldFile);
+      }
+      logoPath = `/uploads/teams/${req.file.filename}`;
+    }
+
+    await pool.query(`
+      UPDATE teams SET name=$1, captain=$2, retained_player=$3, emoji=$4, logo_path=$5
+      WHERE id=$6
+    `, [name || team.name, captain, retained_player, emoji || team.emoji, logoPath, teamId]);
+
+    // Handle retained player update if changed
+    if (retained_player && retained_player !== team.retained_player) {
+      // Logic to sync with players table if needed, but simple manual add/retained logic usually suffices
+    }
+
+    await logEvent(team.auction_id, 'TEAM_UPDATED', `Team "${name || team.name}" updated`, null, teamId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE /api/teams/:teamId
 router.delete('/api/teams/:teamId', async (req, res) => {
   try {
@@ -280,6 +317,37 @@ router.post('/api/auctions/:id/players', playerPhotoUpload.single('photo'), asyn
     const newPlayerId = result.rows[0].id;
     await logEvent(auction.id, 'PLAYER_ADDED', `Player "${name}" added manually`, newPlayerId);
     res.json({ success: true, player_id: newPlayerId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/players/:playerId — update player details
+router.patch('/api/players/:playerId', playerPhotoUpload.single('photo'), async (req, res) => {
+  try {
+    const { name, role, age, base_price, nationality } = req.body;
+    const playerId = req.params.playerId;
+
+    const result = await pool.query('SELECT * FROM players WHERE id = $1', [playerId]);
+    const player = result.rows[0];
+    if (!player) return res.status(404).json({ error: 'Player not found' });
+
+    let photoPath = player.photo_path;
+    if (req.file) {
+      if (player.photo_path) {
+        const oldFile = path.join(__dirname, '../public', player.photo_path);
+        if (fs.existsSync(oldFile)) fs.unlinkSync(oldFile);
+      }
+      photoPath = `/uploads/players/${req.file.filename}`;
+    }
+
+    await pool.query(`
+      UPDATE players SET name=$1, role=$2, age=$3, base_price=$4, nationality=$5, photo_path=$6
+      WHERE id=$7
+    `, [name || player.name, role || player.role, parseInt(age) || player.age, parseFloat(base_price) || player.base_price, nationality || player.nationality, photoPath, playerId]);
+
+    await logEvent(player.auction_id, 'PLAYER_UPDATED', `Player "${name || player.name}" updated`, playerId);
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -351,6 +419,79 @@ router.post('/api/auctions/:id/players/csv',
     } catch (err) {
       await client.query('ROLLBACK');
       res.status(500).json({ error: `CSV import error: ${err.message}` });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+// ── TEAMS CSV IMPORT ─────────────────────────────────────
+router.post('/api/auctions/:id/teams/csv',
+  csvUpload.fields([{ name: 'csv', maxCount: 1 }, { name: 'logos', maxCount: 100 }]),
+  async (req, res) => {
+    const client = await pool.connect();
+    try {
+      const auctionResult = await client.query('SELECT * FROM auctions WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+      const auction = auctionResult.rows[0];
+      if (!auction) return res.status(404).json({ error: 'Auction not found' });
+
+      if (!req.files?.csv?.[0]) return res.status(400).json({ error: 'No CSV file' });
+
+      const csvPath = req.files.csv[0].path;
+      const csvContent = fs.readFileSync(csvPath, 'utf-8');
+      const records = parse(csvContent, { columns: true, skip_empty_lines: true, trim: true, bom: true });
+
+      const logoMap = {};
+      if (req.files?.logos) {
+        for (const img of req.files.logos) logoMap[img.originalname.toLowerCase()] = img.filename;
+      }
+
+      const teamEmojis = ['🦁','🐯','🦅','🐉','🦊','⚡','🔥','🌊','💎','🏆','⭐','🎯'];
+      
+      await client.query('BEGIN');
+      const added = [];
+      const currentCountRes = await client.query('SELECT COUNT(*) AS c FROM teams WHERE auction_id = $1', [auction.id]);
+      let currentCount = parseInt(currentCountRes.rows[0].c);
+
+      for (const row of records) {
+        if (currentCount >= auction.num_teams) break;
+        
+        const name = (row.name || row.Name || '').trim();
+        if (!name) continue;
+
+        const captain = (row.captain || row.Captain || '').trim();
+        const retained_player = (row.retained_player || row.retained || '').trim();
+        const emoji = (row.emoji || teamEmojis[currentCount % teamEmojis.length]);
+        const logoFile = (row.logo_filename || row.logo || '').trim().toLowerCase();
+
+        let logoPath = null;
+        if (logoFile && logoMap[logoFile]) logoPath = `/uploads/teams/${logoMap[logoFile]}`;
+
+        const r = await client.query(`
+          INSERT INTO teams (auction_id, name, logo_path, emoji, captain, retained_player, purse)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING id
+        `, [auction.id, name, logoPath, emoji, captain, retained_player, auction.purse_per_team]);
+        
+        const newTeamId = r.rows[0].id;
+        if (retained_player) {
+          await client.query(`
+            INSERT INTO players (auction_id, name, role, age, base_price, status, sold_to_team_id, sold_price, source)
+            VALUES ($1, $2, 'Player', 0, 0, 'retained', $3, 0, 'csv')
+          `, [auction.id, retained_player, newTeamId]);
+        }
+        
+        added.push({ id: newTeamId, name });
+        currentCount++;
+      }
+      await client.query('COMMIT');
+
+      fs.unlinkSync(csvPath);
+      await logEvent(auction.id, 'TEAM_CSV_IMPORT', `${added.length} teams imported via CSV`);
+      res.json({ success: true, imported: added.length, teams: added });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      res.status(500).json({ error: `Team CSV import error: ${err.message}` });
     } finally {
       client.release();
     }
