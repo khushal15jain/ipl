@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express    = require('express');
 const http       = require('http');
+const path = require("path");
 const dbPath = path.join("/data", "auction.db");
 const cookieParser = require('cookie-parser');
 const { Server } = require('socket.io');
