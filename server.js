@@ -19,10 +19,14 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 app.get('/logout', (req, res) => { res.clearCookie('token'); res.redirect('/login'); });
 
+// Serve static files
+app.use(express.static(path.join(__dirname, 'public')));
+
 // Public viewer routes (no auth required)
 app.get('/join', (req, res) => res.sendFile('join.html', { root: './public' }));
 app.get('/watch/:id', (req, res) => res.sendFile('watch.html', { root: './public' }));
-app.get('/audience/:id', (req, res) => res.sendFile('audience.html', { root: './public' }));
+app.get('/audience/:id', (req, res) => res.redirect(`/broadcast/${req.params.id}`));
+app.get('/broadcast/:id', (req, res) => res.sendFile('broadcast.html', { root: './public' }));
 app.get('/results/:id', (req, res) => res.sendFile('results.html', { root: './public' }));
 
 // ── Routes ───────────────────────────────────────────────────────────────────

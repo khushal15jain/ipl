@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIVE BROADCAST — IPL Auction</title>
+    <link rel="stylesheet" href="/css/broadcast.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="broadcast-page">
+
+    <!-- 📺 THE SCOREBUG (Top Header) -->
+    <header class="bc-header">
+        <div class="bc-scorebug">
+            <div class="bc-score-item">
+                <div class="bc-score-val" id="bc-timer">30</div>
+                <div class="bc-score-lbl">TIMER</div>
+            </div>
+            <div class="bc-score-item">
+                <div class="bc-score-val" id="bc-cur-bid">₹ 0Cr</div>
+                <div class="bc-score-lbl">CURRENT BID</div>
+            </div>
+            <div style="border-left: 1px solid var(--bc-border); padding-left: 20px;">
+                <div class="bc-score-val" id="bc-total-sold">0</div>
+                <div class="bc-score-lbl">PLAYERS SOLD</div>
+            </div>
+        </div>
+        <div style="text-align: right;">
+            <div style="font-family: 'Orbitron', sans-serif; font-size: 1.2rem; font-weight: 900; color: var(--bc-primary);">IPL <span>AUCTION</span></div>
+            <div style="font-size: 0.7rem; color: #888; letter-spacing: 2px;">LIVE BROADCAST STATION</div>
+        </div>
+    </header>
+
+    <!-- 🎥 MAIN STAGE -->
+    <main class="bc-main">
+        
+        <!-- Player Hero Section -->
+        <section class="bc-player-hero">
+            <div class="bc-card-overlay" id="bc-player-stage">
+                <div class="bc-player-img" id="hero-photo">
+                    <img src="" alt="" id="hero-img" style="display:none;">
+                    <div id="hero-placeholder" style="font-size: 5rem; display: flex; align-items: center; justify-content: center; height: 100%;">🏏</div>
+                </div>
+                <div class="bc-player-info">
+                    <div class="bc-player-role" id="hero-role">ROLE — PRIMARY</div>
+                    <div class="bc-player-name" id="hero-name">WAITING FOR AUCTIONEER...</div>
+                    <div style="color: #888; margin-top: 10px; font-size: 1.1rem;" id="hero-meta">Age: — · Base: ₹ —Cr</div>
+                    
+                    <div class="bc-bid-box" id="hero-bid-panel">
+                        <div class="bc-bid-label" id="hero-bid-status">BIDDING IN PROGRESS</div>
+                        <div class="bc-bid-val" id="hero-bid-amount">₹ —Cr</div>
+                        <div id="hero-bidder" style="font-family:'Orbitron'; font-size: 0.9rem; color: var(--bc-secondary); margin-top: 5px;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sidebar (Standings & Feed) -->
+        <aside class="bc-sidebar">
+            <div class="bc-panel">
+                <div class="bc-panel-title">🏆 TOURNAMENT SQUADS</div>
+                <div class="bc-list" id="bc-teams-list">
+                    <!-- Teams populate here -->
+                </div>
+            </div>
+            <div class="bc-panel" style="max-height: 300px;">
+                <div class="bc-panel-title">⚡ RECENT TRANSACTIONS</div>
+                <div class="bc-list" id="bc-recent-feed">
+                    <!-- Recent buys populate here -->
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- 🗞️ TICKER -->
+    <div class="bc-ticker-wrap">
+        <div class="bc-ticker-lbl">BREAKING NEWS</div>
+        <div class="bc-ticker-marquee" id="bc-marquee">
+            <div class="bc-ticker-msg"><span>⚡</span> WELCOME TO THE IPL AUCTION LIVE BROADCAST STATION...</div>
+            <div class="bc-ticker-msg"><span>⚡</span> THE AUCTIONEER IS PREPARING THE NEXT SET OF PLAYERS...</div>
+        </div>
+    </div>
+
+    <!-- 🎆 FULL SCREEN OVERLAY (SOLD/UNSOLD) -->
+    <div class="bc-full-overlay" id="bc-overlay">
+        <div id="bc-overlay-content">
+            <div class="bc-sold-big" id="overlay-action">SOLD!</div>
+            <div style="font-family:'Rajdhani'; font-size: 3rem; font-weight: 700; margin-top: 20px;" id="overlay-name">—</div>
+            <div style="font-family:'Orbitron'; font-size: 2rem; color: var(--bc-primary); margin-top: 10px;" id="overlay-price">₹ 0Cr</div>
+            <div style="font-family:'Rajdhani'; font-size: 1.5rem; color: var(--bc-secondary); margin-top: 5px;" id="overlay-team">—</div>
+        </div>
+    </div>
+
+    <script>
+        const pathParts = location.pathname.split('/').filter(Boolean);
+        const AID = parseInt(pathParts[pathParts.length - 1]);
+        const socket = io();
+
+        let teams = [], currentBid = 0, currentBidder = null;
+        let cdInterval = null, cdVal = 30;
+        let teamPlayerCounts = {}, maxPlayersPerTeam = 11;
+
+        if (isNaN(AID)) {
+            document.getElementById('hero-name').textContent = 'INVALID AUCTION ID';
+        } else {
+            socket.emit('join_auction', { auctionId: AID });
+        }
+
+        socket.on('auction_state', (state) => {
+            teams = state.teams;
+            if (state.auction) maxPlayersPerTeam = state.auction.max_players_per_team || 11;
+            if (state.playerCounts) teamPlayerCounts = state.playerCounts;
+            
+            document.getElementById('bc-total-sold').textContent = state.sold_count;
+            
+            if (state.room && state.room.currentPlayer) {
+                handlePlayerUp(state.room.currentPlayer, state.room.currentBid, state.room.currentBidder);
+            }
+            renderTeams();
+        });
+
+        socket.on('player_up', ({ player, base_price }) => {
+            handlePlayerUp(player, base_price, null);
+        });
+
+        function handlePlayerUp(player, price, bidderId) {
+            currentBid = price;
+            currentBidder = bidderId;
+            
+            const img = document.getElementById('hero-img');
+            const placeholder = document.getElementById('hero-placeholder');
+            if (player.photo_path) {
+                img.src = player.photo_path;
+                img.style.display = 'block';
+                placeholder.style.display = 'none';
+            } else {
+                img.style.display = 'none';
+                placeholder.style.display = 'flex';
+            }
+
+            document.getElementById('hero-name').textContent = player.name;
+            document.getElementById('hero-role').textContent = `${player.role} — ${player.nationality || 'INTERNATIONAL'}`;
+            document.getElementById('hero-meta').textContent = `Age: ${player.age||'—'} · Base: ₹${player.base_price}Cr`;
+            document.getElementById('bc-cur-bid').textContent = `₹${price}Cr`;
+            document.getElementById('hero-bid-amount').textContent = `₹${price}Cr`;
+            
+            const bidder = bidderId ? (teams.find(t => t.id === bidderId)) : null;
+            document.getElementById('hero-bidder').textContent = bidder ? `BID BY: ${bidder.name}` : 'AWAITING OPENING BID';
+            document.getElementById('hero-bid-status').textContent = 'BIDDING ACTIVE';
+            
+            startCountdown();
+            renderTeams();
+        }
+
+        socket.on('bid_placed', ({ teamId, teamName, bidAmount }) => {
+            currentBid = bidAmount;
+            currentBidder = teamId;
+            document.getElementById('bc-cur-bid').textContent = `₹${bidAmount}Cr`;
+            document.getElementById('hero-bid-amount').textContent = `₹${bidAmount}Cr`;
+            document.getElementById('hero-bidder').textContent = `BID BY: ${teamName}`;
+            
+            startCountdown();
+            renderTeams();
+        });
+
+        socket.on('player_sold', ({ player, team, price, sold_count, playerCounts }) => {
+            if (playerCounts) teamPlayerCounts = playerCounts;
+            document.getElementById('bc-total-sold').textContent = sold_count;
+            clearInterval(cdInterval);
+            
+            showOverlay('SOLD!', player.name, `₹${price}Cr`, team.name, true);
+            addRecentBuy(player.name, team.name, price);
+            addTickerItem(`BREAKING: ${player.name} SOLD TO ${team.name} FOR ₹${price}CR`);
+            
+            setTimeout(() => {
+                hideOverlay();
+                document.getElementById('hero-name').textContent = 'NEXT PLAYER COMING UP...';
+                document.getElementById('hero-bid-status').textContent = 'AUCTION PAUSED';
+                renderTeams();
+            }, 3500);
+        });
+
+        socket.on('player_unsold', ({ player, unsold_count }) => {
+            clearInterval(cdInterval);
+            showOverlay('UNSOLD', player.name, '', '', false);
+            addTickerItem(`NEWS: ${player.name} REMAINED UNSOLD`);
+            setTimeout(() => {
+                hideOverlay();
+                document.getElementById('hero-name').textContent = 'NEXT PLAYER COMING UP...';
+            }, 3000);
+        });
+
+        socket.on('auction_complete', () => {
+            addTickerItem(`AUCTION COMPLETE! FINAL RESULTS ARE IN...`);
+            setTimeout(() => location.href = `/results/${AID}`, 4000);
+        });
+
+        function renderTeams() {
+            const list = document.getElementById('bc-teams-list');
+            list.innerHTML = teams.map(t => {
+                const squadCount = teamPlayerCounts[t.id] || 0;
+                const isHigh = t.id === currentBidder;
+                const remaining = (t.purse - t.spent).toFixed(2);
+                return `
+                <div class="bc-team-row ${isHigh?'highlight':''}">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <div style="font-size: 1.2rem;">${t.logo_path?`<img src="${t.logo_path}" style="width:24px;height:24px;object-fit:contain;">`:(t.emoji||'🏏')}</div>
+                        <div>
+                            <div style="font-weight:700; font-size:0.9rem;">${t.name}</div>
+                            <div style="font-size:0.7rem; color:#888;">PURSE: ₹${remaining}Cr</div>
+                        </div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-family:'Orbitron'; font-size:0.8rem; font-weight:700;">${squadCount}/${maxPlayersPerTeam}</div>
+                        <div style="font-size:0.6rem; color:#888;">SQUAD</div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function startCountdown() {
+            cdVal = 30;
+            document.getElementById('bc-timer').textContent = cdVal;
+            clearInterval(cdInterval);
+            cdInterval = setInterval(() => {
+                cdVal--;
+                document.getElementById('bc-timer').textContent = cdVal;
+                if (cdVal <= 0) clearInterval(cdInterval);
+            }, 1000);
+        }
+
+        function addRecentBuy(pname, tname, price) {
+            const wrap = document.getElementById('bc-recent-feed');
+            const el = document.createElement('div');
+            el.className = 'bc-team-row';
+            el.style.borderLeft = '3px solid var(--bc-primary)';
+            el.innerHTML = `
+                <div>
+                    <div style="font-weight:700; font-size:0.85rem;">${pname}</div>
+                    <div style="font-size:0.65rem; color:var(--bc-secondary);">${tname}</div>
+                </div>
+                <div style="font-family:'Orbitron'; color:var(--bc-primary); font-size:0.85rem;">₹${price}Cr</div>
+            `;
+            wrap.insertBefore(el, wrap.firstChild);
+            if (wrap.children.length > 5) wrap.removeChild(wrap.lastChild);
+        }
+
+        function addTickerItem(text) {
+            const wrap = document.getElementById('bc-marquee');
+            const item = document.createElement('div');
+            item.className = 'bc-ticker-msg';
+            item.innerHTML = `<span>⚡</span> ${text.toUpperCase()}`;
+            wrap.appendChild(item);
+            if (wrap.children.length > 8) wrap.removeChild(wrap.firstChild);
+        }
+
+        function showOverlay(action, name, price, team, isSold) {
+            const o = document.getElementById('bc-overlay');
+            document.getElementById('overlay-action').textContent = action;
+            document.getElementById('overlay-action').style.color = isSold ? 'var(--bc-gold)' : 'var(--bc-red)';
+            document.getElementById('overlay-name').textContent = name;
+            document.getElementById('overlay-price').textContent = price;
+            document.getElementById('overlay-team').textContent = team ? `TO ${team}` : '';
+            o.classList.add('active');
+        }
+        function hideOverlay() { document.getElementById('bc-overlay').classList.remove('active'); }
+
+    </script>
+</body>
+</html>
