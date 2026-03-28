@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // Database file stored in /db folder
-const DB_PATH = path.join(__dirname,"db", 'auction.db');
+const DB_PATH = path.join(__dirname, 'auction.db');
 
 let db;
 
@@ -47,6 +47,7 @@ function initSchema() {
       max_players_per_team  INTEGER DEFAULT 11,
       status                TEXT    DEFAULT 'draft',  -- draft | live | completed
       current_player_id     INTEGER,
+      joinCode              TEXT    UNIQUE,
       created_at            TEXT    DEFAULT (datetime('now','localtime')),
       started_at            TEXT,
       completed_at          TEXT,
@@ -135,9 +136,20 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_history_auction  ON auction_history(auction_id);
   `);
 
-  // Migration: add max_players_per_team to existing DBs
   try {
     db.exec(`ALTER TABLE auctions ADD COLUMN max_players_per_team INTEGER DEFAULT 11`);
+  } catch (_) { /* column already exists */ }
+
+  // Migration: add joinCode to existing DBs
+  try {
+    db.exec(`ALTER TABLE auctions ADD COLUMN joinCode TEXT`);
+    // Generate codes for existing auctions
+    const auctions = db.prepare('SELECT id FROM auctions WHERE joinCode IS NULL').all();
+    const update = db.prepare('UPDATE auctions SET joinCode = ? WHERE id = ?');
+    auctions.forEach(a => {
+      const code = 'IPL' + Math.random().toString(36).substring(2, 6).toUpperCase();
+      update.run(code, a.id);
+    });
   } catch (_) { /* column already exists */ }
 
   console.log(`✅ SQLite database ready → ${DB_PATH}`);

@@ -11,13 +11,26 @@ const { teamUpload, playerPhotoUpload, csvUpload } = require('../middleware/uplo
 //  PUBLIC ENDPOINTS (no auth) — for Join Auction flow
 // ══════════════════════════════════════════════════════
 
-// GET /api/auctions/public — list all live/draft auctions (id, name, season, status)
+// GET /api/auctions/public — list all auctions that are currently LIVE
 router.get('/api/auctions/public', (req, res) => {
   const db = getDB();
   const auctions = db.prepare(
-    `SELECT id, name, season, status FROM auctions WHERE status IN ('draft','live') ORDER BY created_at DESC`
+    `SELECT id, name, season, status FROM auctions WHERE status = 'live' ORDER BY created_at DESC`
   ).all();
   res.json({ auctions });
+});
+
+// GET /api/auctions/public/join/:code — validate joinCode and return auction/teams
+router.get('/api/auctions/public/join/:code', (req, res) => {
+  const db = getDB();
+  const auction = db.prepare(
+    `SELECT id, name, season, status FROM auctions WHERE joinCode = ? COLLATE NOCASE`
+  ).get(req.params.code);
+
+  if (!auction) return res.status(404).json({ error: 'Invalid Join Code' });
+
+  const teams = db.prepare('SELECT id, name, emoji, logo_path FROM teams WHERE auction_id = ? ORDER BY id').all(auction.id);
+  res.json({ auction, teams });
 });
 
 // GET /api/auctions/public/:name/teams — fetch teams for a named auction
@@ -72,13 +85,24 @@ router.get('/api/auctions', (req, res) => {
 router.post('/api/auctions', (req, res) => {
   const { name, season, num_teams, purse_per_team, bid_increment, max_players_per_team } = req.body;
   if (!name) return res.status(400).json({ error: 'Auction name required' });
+
   const db = getDB();
+  // Generate unique 6-char join code (IPL + 3 random)
+  let joinCode;
+  let exists = true;
+  while (exists) {
+    joinCode = 'IPL' + Math.random().toString(36).substring(2, 6).toUpperCase();
+    const check = db.prepare('SELECT id FROM auctions WHERE joinCode = ?').get(joinCode);
+    if (!check) exists = false;
+  }
+
   const result = db.prepare(`
-    INSERT INTO auctions (user_id, name, season, num_teams, purse_per_team, bid_increment, max_players_per_team)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(req.user.id, name, season || '2025', num_teams || 8, purse_per_team || 100, bid_increment || 0.25, max_players_per_team || 11);
-  logEvent(result.lastInsertRowid, 'AUCTION_CREATED', `Auction "${name}" created`);
-  res.json({ success: true, auction_id: result.lastInsertRowid });
+    INSERT INTO auctions (user_id, name, season, num_teams, purse_per_team, bid_increment, max_players_per_team, joinCode)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(req.user.id, name, season || '2025', num_teams || 8, purse_per_team || 100, bid_increment || 0.25, max_players_per_team || 11, joinCode);
+
+  logEvent(result.lastInsertRowid, 'AUCTION_CREATED', `Auction "${name}" created (Code: ${joinCode})`);
+  res.json({ success: true, auction_id: result.lastInsertRowid, joinCode });
 });
 
 // GET /api/auctions/:id — full auction detail

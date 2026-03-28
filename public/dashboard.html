@@ -85,17 +85,17 @@
     <div style="color:var(--muted);font-size:.82rem;margin-bottom:24px;">Find a tournament and select your team</div>
 
     <div style="margin-bottom:16px;">
-      <label style="font-size:.78rem;color:var(--muted);margin-bottom:6px;display:block;">TOURNAMENT NAME</label>
+      <label style="font-size:.78rem;color:var(--muted);margin-bottom:6px;display:block;">JOIN CODE</label>
       <div style="display:flex;gap:8px;">
-        <input id="join-tournament" type="text" placeholder="e.g. IPL 2025" style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px 14px;color:#fff;font-size:.9rem;outline:none;" oninput="onTournamentInput()">
-        <button class="btn btn-outline btn-sm" onclick="lookupTournament()">FIND</button>
+        <input id="join-code" type="text" placeholder="e.g. IPL1234" style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px 14px;color:#fff;font-size:1.1rem;font-weight:700;text-transform:uppercase;outline:none;" oninput="onCodeInput()">
+        <button class="btn btn-outline btn-sm" onclick="lookupCode()">VERIFY</button>
       </div>
-      <div id="join-tournament-status" style="font-size:.72rem;margin-top:6px;min-height:16px;"></div>
+      <div id="join-status" style="font-size:.72rem;margin-top:6px;min-height:16px;"></div>
     </div>
 
     <div id="join-team-section" style="display:none;margin-bottom:24px;">
-      <label style="font-size:.78rem;color:var(--muted);margin-bottom:6px;display:block;">YOUR TEAM</label>
-      <select id="join-team-select" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px 14px;color:#fff;font-size:.9rem;outline:none;appearance:none;cursor:pointer;">
+      <label style="font-size:.78rem;color:var(--muted);margin-bottom:6px;display:block;">SELECT YOUR TEAM</label>
+      <select id="join-team-select" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:12px 14px;color:#fff;font-size:1rem;outline:none;appearance:none;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:600;">
         <option value="">— Select a team —</option>
       </select>
     </div>
@@ -113,32 +113,32 @@ let joinAuctionData = null; // { id, bid_increment, max_players_per_team }
 
 function openJoinModal() {
   document.getElementById('join-modal').style.display = 'flex';
-  document.getElementById('join-tournament').value = '';
-  document.getElementById('join-tournament-status').textContent = '';
+  document.getElementById('join-code').value = '';
+  document.getElementById('join-status').textContent = '';
   document.getElementById('join-team-section').style.display = 'none';
   document.getElementById('join-submit').disabled = true;
   joinAuctionData = null;
-  setTimeout(() => document.getElementById('join-tournament').focus(), 50);
+  setTimeout(() => document.getElementById('join-code').focus(), 50);
 }
 function closeJoinModal() { document.getElementById('join-modal').style.display = 'none'; }
 
-function onTournamentInput() {
-  document.getElementById('join-tournament-status').textContent = '';
+function onCodeInput() {
+  document.getElementById('join-status').textContent = '';
   document.getElementById('join-team-section').style.display = 'none';
   document.getElementById('join-submit').disabled = true;
 }
 
-async function lookupTournament() {
-  const name = document.getElementById('join-tournament').value.trim();
-  const status = document.getElementById('join-tournament-status');
-  if (!name) { status.textContent = '⚠️ Enter a tournament name.'; status.style.color='var(--red)'; return; }
-  status.textContent = 'Searching...'; status.style.color = 'var(--muted)';
+async function lookupCode() {
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  const status = document.getElementById('join-status');
+  if (!code) { status.textContent = '⚠️ Enter a join code.'; status.style.color='var(--red)'; return; }
+  status.textContent = 'Verifying code...'; status.style.color = 'var(--muted)';
   try {
-    const r = await fetch(`/api/auctions/public/${encodeURIComponent(name)}/teams`);
-    if (!r.ok) { status.textContent = '❌ Tournament not found.'; status.style.color='var(--red)'; return; }
+    const r = await fetch(`/api/auctions/public/join/${encodeURIComponent(code)}`);
+    if (!r.ok) { status.textContent = '❌ Invalid Join Code.'; status.style.color='var(--red)'; return; }
     const { auction, teams } = await r.json();
     joinAuctionData = auction;
-    status.textContent = `✅ Found: ${auction.name} (${auction.status.toUpperCase()})`;
+    status.textContent = `✅ Found: ${auction.name}`;
     status.style.color = 'var(--green)';
     const sel = document.getElementById('join-team-select');
     sel.innerHTML = '<option value="">— Select a team —</option>' +
@@ -148,7 +148,7 @@ async function lookupTournament() {
       document.getElementById('join-submit').disabled = !sel.value;
     };
   } catch(e) {
-    status.textContent = '❌ Error finding tournament.'; status.style.color='var(--red)';
+    status.textContent = '❌ Error validating code.'; status.style.color='var(--red)';
   }
 }
 
@@ -167,9 +167,9 @@ document.getElementById('join-modal').addEventListener('click', function(e) {
   if (e.target === this) closeJoinModal();
 });
 
-// Also allow Enter key in the tournament input
-document.getElementById('join-tournament').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') lookupTournament();
+// Also allow Enter key in the code input
+document.getElementById('join-code').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') lookupCode();
 });
 
 // ── Dashboard logic ──────────────────────────────────────────────────────────
@@ -200,8 +200,11 @@ async function loadAuctions() {
   const statusColor = { draft:'var(--muted)', live:'var(--red)', completed:'var(--green)' };
   el.innerHTML = auctions.map(a => `
     <div class="auction-row">
-      <div>
-        <div style="font-family:'Rajdhani',sans-serif;font-size:1.05rem;font-weight:700;">🏏 ${a.name} <span style="color:var(--muted);font-size:.78rem;">(${a.season})</span></div>
+      <div style="flex:1;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="font-family:'Rajdhani',sans-serif;font-size:1.05rem;font-weight:700;">🏏 ${a.name} <span style="color:var(--muted);font-size:.78rem;">(${a.season})</span></div>
+          ${a.joinCode ? `<code style="background:rgba(0,255,136,.1);color:#00FF88;padding:2px 8px;border-radius:4px;font-size:.75rem;border:1px solid rgba(0,255,136,.3);" title="Join Code">${a.joinCode}</code>` : ''}
+        </div>
         <div style="font-size:.76rem;color:var(--muted);margin-top:3px;">${a.team_count} teams · ${a.player_count} players · ${a.sold_count} sold · Created ${new Date(a.created_at).toLocaleDateString()}</div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">

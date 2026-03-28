@@ -2,187 +2,127 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Live Viewer — IPL Auction</title>
+<title>Watch Auction — IPL Auction</title>
 <link rel="stylesheet" href="/css/main.css">
 <script src="/socket.io/socket.io.js"></script>
 <style>
-/* ── Viewer badge ─────────────────────────────────────── */
-.viewer-badge {
-  display: flex; align-items: center; gap: 8px;
-  background: linear-gradient(135deg, rgba(0,255,136,.15), rgba(0,209,255,.1));
-  border: 1px solid rgba(0,255,136,.3);
-  border-radius: 20px; padding: 5px 14px;
-  font-family: 'Orbitron', monospace; font-size: .72rem;
-  color: #00FF88; white-space: nowrap;
-}
-.viewer-badge .vb-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: #00FF88; animation: vbpulse 1.5s infinite;
-}
-@keyframes vbpulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.4;transform:scale(.7);} }
-
-/* ── Watch layout ─────────────────────────────────────── */
-.watch-layout {
-  display: grid;
-  grid-template-columns: 1fr 400px;
-  gap: 18px;
-  padding: 18px;
-  max-width: 1300px;
-  margin: 0 auto;
-  min-height: calc(100vh - 60px);
-}
-@media (max-width: 900px) {
-  .watch-layout { grid-template-columns: 1fr; }
-}
-
-/* ── Team panels ──────────────────────────────────────── */
-.teams-scroll { display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 120px); overflow-y: auto; padding-right: 4px; }
-.teams-scroll::-webkit-scrollbar { width: 4px; }
-.teams-scroll::-webkit-scrollbar-track { background: transparent; }
-.teams-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 4px; }
-
-.watch-team-row {
-  background: rgba(255,255,255,.04);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 12px; padding: 12px 14px;
-  transition: border-color .3s, background .3s;
-}
-.watch-team-row.my-team {
-  border-color: rgba(0,255,136,.4);
-  background: rgba(0,255,136,.06);
-}
-.watch-team-row.highest {
-  border-color: rgba(255,215,0,.5);
-  background: rgba(255,215,0,.07);
-  animation: highpulse .4s ease;
-}
-@keyframes highpulse { 0%{transform:scale(1);} 50%{transform:scale(1.01);} 100%{transform:scale(1);} }
-
-.wtr-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.wtr-info { display: flex; align-items: center; gap: 10px; }
-.wtr-meta { font-size: .7rem; color: var(--muted); margin-bottom: 4px; }
-.wtr-roster { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; max-height: 80px; overflow-y: auto; }
-.roster-pill {
-  background: rgba(255,255,255,.07); border-radius: 6px;
-  padding: 2px 7px; font-size: .64rem; color: var(--muted);
-  white-space: nowrap; transition: background .2s;
-}
-.roster-pill.new-player { background: rgba(0,255,136,.15); color: #00FF88; }
-
-/* ── Sold overlay (extends base) ───────────────────────── */
-.sold-overlay .sold-word { animation: wordpop .5s cubic-bezier(.175,.885,.32,1.275); }
-@keyframes wordpop { 0%{transform:scale(0) rotate(-10deg);opacity:0;} 100%{transform:scale(1) rotate(0);opacity:1;} }
-
-/* ── Unsold flash ─────────────────────────────────────── */
-.unsold-flash { animation: unsoldflash 2.4s ease forwards; }
-@keyframes unsoldflash {
-  0%{background:rgba(255,51,102,.0);}
-  15%{background:rgba(255,51,102,.18);}
-  40%{background:rgba(255,51,102,.12);}
-  100%{background:rgba(255,51,102,.0);}
-}
-
-/* ── Bid history ──────────────────────────────────────── */
-.bid-log { background: rgba(0,0,0,.25); border-radius: 10px; padding: 12px; margin-top: 14px; max-height: 180px; overflow-y: auto; }
-.bid-log::-webkit-scrollbar { width: 3px; }
-.bid-log::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 3px; }
-
-/* ── Confetti ─────────────────────────────────────────── */
-.cp { position: fixed; pointer-events: none; z-index: 9999; animation: cpfall linear forwards; }
-@keyframes cpfall { to { transform: translateY(110vh) rotate(720deg); opacity: 0; } }
+  .viewer-badge {
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.15), rgba(0, 209, 255, 0.15));
+    border: 1px solid rgba(0, 255, 136, 0.3);
+    border-radius: 50px;
+    padding: 6px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.8rem;
+    color: #fff;
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.1);
+  }
+  .viewer-badge .dot {
+    width: 8px; height: 8px; background: #00FF88; border-radius: 50%;
+    box-shadow: 0 0 8px #00FF88;
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+  
+  .team-bid-row.my-team {
+    background: rgba(0, 255, 136, 0.08);
+    border-color: rgba(0, 255, 136, 0.4);
+    box-shadow: inset 0 0 20px rgba(0, 255, 136, 0.05);
+  }
+  .team-bid-row.my-team .bid-btn {
+    background: #00FF88;
+    color: #000;
+  }
+  
+  .bid-btn:not(.my-team-btn) {
+    display: none;
+  }
+  
+  .read-only-tag {
+    font-size: 0.65rem;
+    color: var(--muted);
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  
+  /* Confetti/SOLD styles are already in main.css or were in auction.html, I'll re-include essential ones here if needed or assume main.css has them */
 </style>
 </head>
 <body class="page">
 
-<!-- TOPBAR -->
-<div class="topbar" style="position:sticky;top:0;z-index:200;">
-  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-    <div class="logo" style="font-size:1.1rem;">IPL <span>AUCTION</span></div>
-    <div style="display:flex;align-items:center;gap:6px;font-family:'Orbitron',monospace;font-size:.8rem;font-weight:700;color:var(--red);">
-      <div class="live-dot"></div>LIVE
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:16px;">
+    <div class="logo">IPL <span>AUCTION</span></div>
+    <div class="viewer-badge">
+      <div class="dot"></div>
+      <span>YOU ARE: <b id="my-team-name" style="color:#00FF88;">...</b></span>
     </div>
-    <div id="a-title" style="font-family:'Rajdhani',sans-serif;font-size:.92rem;font-weight:700;color:var(--muted);"></div>
   </div>
-  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-    <!-- Viewer badge -->
-    <div class="viewer-badge" id="viewer-badge">
-      <div class="vb-dot"></div>
-      <span>You: <strong id="vb-team">—</strong></span>
-    </div>
-    <!-- Scorebug -->
+  <div style="display:flex;align-items:center;gap:16px;">
     <div class="scorebug">
       <div class="sb-item"><div class="sb-val" id="sb-sold">0</div><div class="sb-lbl">SOLD</div></div>
-      <div class="sb-item"><div class="sb-val" id="sb-unsold">0</div><div class="sb-lbl">UNSOLD</div></div>
       <div class="sb-item"><div class="sb-val" id="sb-rem">0</div><div class="sb-lbl">REMAINING</div></div>
     </div>
-    <a href="/join" class="btn btn-outline btn-sm">← LEAVE</a>
+    <a href="/dashboard" class="btn btn-outline btn-sm">← EXIT</a>
   </div>
 </div>
 
-<!-- MAIN LAYOUT -->
-<div class="watch-layout">
-
-  <!-- LEFT: Player Stage -->
+<div class="auction-layout">
+  <!-- LEFT: Stage -->
   <div class="stage">
-    <div style="display:flex;gap:14px;margin-bottom:16px;flex-wrap:wrap;">
-      <div class="stat-chip"><div class="val" id="st-num">—</div><div class="lbl">PLAYER #</div></div>
-      <div class="stat-chip"><div class="val countdown" id="countdown">—</div><div class="lbl">SECONDS</div></div>
-      <div class="stat-chip"><div class="val" id="st-bid" style="color:var(--green);">—</div><div class="lbl">CURRENT BID</div></div>
+    <div style="display:flex;gap:12px;margin-bottom:16px;justify-content:center;">
+      <div class="stat-chip"><div class="val countdown" id="countdown">30</div><div class="lbl">TIMER</div></div>
+      <div class="stat-chip"><div class="val" id="st-bid" style="color:var(--green);">₹ 0Cr</div><div class="lbl">CURRENT BID</div></div>
     </div>
 
     <div class="player-card" id="player-card">
       <div class="player-photo" id="st-photo">🏏</div>
-      <div class="player-name" id="st-name">Waiting for auction to start…</div>
+      <div class="player-name" id="st-name">Waiting for auctioneer...</div>
       <div class="player-meta">
         <span class="role-badge rb-bat" id="st-role">—</span>
         <span style="color:var(--muted);font-size:.83rem;" id="st-age">Age: —</span>
-        <span style="color:var(--muted);font-size:.83rem;" id="st-nat"></span>
       </div>
       <div class="base-box">
         <div class="label">Base Price</div>
         <div class="price" id="st-base">₹ —</div>
       </div>
-      <div class="cur-bid" id="st-cur-bid">Waiting for auction to start…</div>
+      <div class="cur-bid" id="st-cur-bid">Connecting to live feed...</div>
+    </div>
+    
+    <!-- BIG BID BUTTON FOR MY TEAM -->
+    <div style="margin-top:24px; text-align:center;">
+       <button id="main-bid-btn" class="btn btn-green" style="width:100%; max-width:300px; height:60px; font-size:1.4rem; display:none;" onclick="placeMyBid()">PLACE BID</button>
+       <div id="bid-reason" style="margin-top:10px; color:var(--red); font-weight:700; font-family:'Orbitron',sans-serif; font-size:0.8rem;"></div>
     </div>
 
-    <!-- BID BUTTON (only for viewer's own team) -->
-    <div style="margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;" id="bid-action-area">
-      <button class="btn btn-gold" id="my-bid-btn" onclick="placeMyBid()" disabled style="font-size:1rem;padding:12px 32px;min-width:160px;">
-        🏏 PLACE BID
-      </button>
-      <div id="bid-reason" style="display:none;background:rgba(255,51,102,.12);border:1px solid rgba(255,51,102,.3);border-radius:8px;padding:8px 16px;font-size:.78rem;color:var(--red);align-items:center;gap:6px;"></div>
-    </div>
-
-    <!-- Progress -->
-    <div style="margin-top:16px;width:100%;max-width:400px;">
+    <div style="margin-top:20px;width:100%;max-width:400px;margin-left:auto;margin-right:auto;">
       <div class="prog-wrap">
         <div class="prog-labels"><span id="prog-lbl">Progress</span><span id="prog-pct">0%</span></div>
         <div class="prog-track"><div class="prog-bar" id="prog-bar" style="width:0%"></div></div>
       </div>
     </div>
-
-    <!-- Bid History -->
-    <div class="bid-log" style="max-width:460px;margin-top:16px;">
-      <div class="bid-log-title">📋 Bid History</div>
-      <div id="bid-entries"></div>
-    </div>
   </div>
 
-  <!-- RIGHT: Teams panel -->
+  <!-- RIGHT: Bidding Panel -->
   <div class="bid-panel">
     <div class="panel-hdr">
-      <h3>🏆 TEAMS &amp; SQUADS</h3>
-      <div style="font-size:.72rem;color:var(--muted);margin-top:3px;">Live budgets &amp; player rosters</div>
+      <h3>🏟️ TOURNAMENT SQUADS</h3>
     </div>
-    <div class="teams-scroll" id="teams-list"></div>
-
-    <div class="panel-footer" style="margin-top:14px;">
-      <a href="/join" class="btn btn-outline btn-sm">← LEAVE AUCTION</a>
+    
+    <div class="teams-list" id="teams-list">
+      <!-- Teams populated here -->
+    </div>
+    
+    <div class="bid-log">
+      <div class="bid-log-title">📋 Live Updates</div>
+      <div id="bid-entries"></div>
     </div>
   </div>
 </div>
 
-<!-- SOLD / UNSOLD OVERLAY -->
+<!-- SOLD OVERLAY -->
 <div class="sold-overlay" id="sold-overlay">
   <div class="confetti-wrap" id="confetti-wrap"></div>
   <div class="sold-word" id="sold-word">SOLD!</div>
@@ -196,335 +136,235 @@
 <div id="toast"></div>
 
 <script>
-// ── Identity from localStorage ────────────────────────────────────────────────
-const AID       = parseInt(location.pathname.split('/').pop());
-const MY_TEAM_ID = parseInt(localStorage.getItem('viewer_team_id') || '0');
-const MY_TEAM_NAME = localStorage.getItem('viewer_team_name') || 'Unknown Team';
-
-// Guard: if no identity saved, redirect to join
-if (!MY_TEAM_ID || !AID) { location.href = '/join'; }
-
-document.getElementById('vb-team').textContent   = MY_TEAM_NAME;
+const AID = location.pathname.split('/').pop();
+const MY_TEAM_ID = parseInt(localStorage.getItem('viewer_team_id'));
+const MY_TEAM_NAME = localStorage.getItem('viewer_team_name') || 'Your Team';
 
 const socket = io();
 let teams = [], currentPlayer = null, currentBid = 0, currentBidder = null;
-let cdInterval = null, cdVal = 30, playerIdx = 0, totalPlayers = 0;
-let maxPlayersPerTeam = 11, bidIncrement = 0.25;
+let cdInterval = null, cdVal = 30, totalPlayers = 0;
+let maxPlayersPerTeam = 11;
 let teamPlayerCounts = {};
-let soldPlayersMap = {};  // teamId → [player, ...]
-const RCL = { Batsman:'rb-bat', Bowler:'rb-bowl', 'All-Rounder':'rb-all', 'Wicket-Keeper':'rb-wk' };
+let bidIncrement = 0.25;
 
-socket.emit('join_auction', { auctionId: AID });
+document.getElementById('my-team-name').textContent = MY_TEAM_NAME;
 
-// ── Socket events ─────────────────────────────────────────────────────────────
+// Join as participant
+socket.emit('join_auction', { auctionId: parseInt(AID), teamId: MY_TEAM_ID });
+
 socket.on('auction_state', (state) => {
   teams = state.teams;
   if (state.auction) {
-    document.getElementById('a-title').textContent = state.auction.name;
     maxPlayersPerTeam = state.auction.max_players_per_team || 11;
-    bidIncrement      = state.auction.bid_increment || 0.25;
+    bidIncrement = state.auction.bid_increment || 0.25;
   }
   if (state.playerCounts) teamPlayerCounts = state.playerCounts;
-  totalPlayers = (state.pending_count || 0) + (state.sold_count || 0) + (state.unsold_count || 0);
-
-  document.getElementById('sb-sold').textContent   = state.sold_count   || 0;
-  document.getElementById('sb-unsold').textContent = state.unsold_count || 0;
-  document.getElementById('sb-rem').textContent    = state.pending_count || 0;
-
-  // Rebuild sold players map
-  soldPlayersMap = {};
-  if (state.soldPlayers) {
-    state.soldPlayers.forEach(p => {
-      if (!soldPlayersMap[p.sold_to_team_id]) soldPlayersMap[p.sold_to_team_id] = [];
-      soldPlayersMap[p.sold_to_team_id].push(p);
-    });
-  }
-
-  // If there's an active player in the room, restore state
+  totalPlayers = state.pending_count + state.sold_count + state.unsold_count;
+  
+  document.getElementById('sb-sold').textContent = state.sold_count;
+  document.getElementById('sb-rem').textContent = state.pending_count;
+  
   if (state.room && state.room.currentPlayer) {
-    currentPlayer = state.room.currentPlayer;
-    currentBid    = state.room.currentBid;
-    currentBidder = state.room.currentBidder;
-    renderCurrentPlayer(currentPlayer, currentBid);
-    refreshMyBidButton();
+      handlePlayerUp(state.room.currentPlayer, state.room.currentBid, state.room.currentBidder);
   }
-
+  
   renderTeams();
+  refreshMyBidButton();
 });
 
 socket.on('player_up', ({ player, base_price }) => {
-  currentPlayer = player;
-  currentBid    = base_price;
-  currentBidder = null;
-  playerIdx++;
-
-  renderCurrentPlayer(player, base_price);
-  document.getElementById('st-cur-bid').textContent = 'No bids yet — Auction is live!';
-  document.getElementById('st-num').textContent = playerIdx;
-
-  const done = parseInt(document.getElementById('sb-sold').textContent) + parseInt(document.getElementById('sb-unsold').textContent);
-  const pct  = totalPlayers ? Math.round(done / totalPlayers * 100) : 0;
-  document.getElementById('prog-bar').style.width = pct + '%';
-  document.getElementById('prog-lbl').textContent = `${done} / ${totalPlayers} players`;
-  document.getElementById('prog-pct').textContent = pct + '%';
-  document.getElementById('sb-rem').textContent = Math.max(0, totalPlayers - done - 1);
-
-  document.getElementById('bid-entries').innerHTML = '';
-  refreshMyBidButton();
-  startCountdown();
+  handlePlayerUp(player, base_price, null);
 });
+
+function handlePlayerUp(player, price, bidderId) {
+  currentPlayer = player;
+  currentBid = price;
+  currentBidder = bidderId;
+  
+  const photo = document.getElementById('st-photo');
+  if (player.photo_path) photo.innerHTML = `<img src="${player.photo_path}" alt="${player.name}">`;
+  else { photo.textContent = '🏏'; }
+
+  document.getElementById('st-name').textContent = player.name;
+  document.getElementById('st-role').textContent = player.role;
+  document.getElementById('st-age').textContent = `Age: ${player.age||'—'}`;
+  document.getElementById('st-base').textContent = `₹${player.base_price}Cr`;
+  document.getElementById('st-bid').textContent = `₹${price}Cr`;
+  
+  const bidderName = bidderId ? (teams.find(t => t.id === bidderId)?.name || 'Bidder') : 'No bids yet';
+  document.getElementById('st-cur-bid').textContent = bidderId ? `${bidderName}: ₹${price}Cr` : 'Place your bid!';
+  
+  document.getElementById('bid-entries').innerHTML = '';
+  document.getElementById('main-bid-btn').style.display = 'inline-block';
+  
+  startCountdown();
+  refreshMyBidButton();
+}
 
 socket.on('bid_placed', ({ teamId, teamName, bidAmount }) => {
-  currentBid    = bidAmount;
+  currentBid = bidAmount;
   currentBidder = teamId;
-
   document.getElementById('st-cur-bid').textContent = `${teamName}: ₹${bidAmount}Cr`;
   document.getElementById('st-bid').textContent = `₹${bidAmount}Cr`;
-
-  // Highlight leading team row
-  document.querySelectorAll('.watch-team-row').forEach(r => r.classList.remove('highest'));
+  
+  document.querySelectorAll('.team-bid-row').forEach(r => r.classList.remove('highest'));
   const row = document.querySelector(`[data-team-id="${teamId}"]`);
   if (row) row.classList.add('highest');
-
+  
   addBidLog(`${teamName}: ₹${bidAmount}Cr`);
-  refreshMyBidButton();
   startCountdown();
-});
-
-socket.on('bid_reset', ({ base_price }) => {
-  currentBid    = base_price;
-  currentBidder = null;
-  document.getElementById('st-cur-bid').textContent = 'Bid reset — place your bid!';
-  document.getElementById('st-bid').textContent = `₹${base_price}Cr`;
-  document.querySelectorAll('.watch-team-row').forEach(r => r.classList.remove('highest'));
-  addBidLog('Bid reset by auctioneer');
   refreshMyBidButton();
-  startCountdown();
 });
 
 socket.on('player_sold', ({ player, team, price, sold_count, playerCounts }) => {
-  clearInterval(cdInterval);
-
-  // Update local team data
   const t = teams.find(x => x.id === team.id);
   if (t) t.spent += price;
   if (playerCounts) teamPlayerCounts = playerCounts;
 
-  // Add to roster map
-  if (!soldPlayersMap[team.id]) soldPlayersMap[team.id] = [];
-  soldPlayersMap[team.id].push({ ...player, sold_to_team_id: team.id });
-
   document.getElementById('sb-sold').textContent = sold_count;
+  clearInterval(cdInterval);
   showOverlay('SOLD!', player.name, `₹${price}Cr`, team.name, true);
   confetti();
-  renderTeams();
-
+  
   setTimeout(() => {
     hideOverlay();
-    currentPlayer = null; currentBid = 0; currentBidder = null;
-    refreshMyBidButton();
+    document.getElementById('st-name').textContent = 'Waiting for next player...';
+    document.getElementById('main-bid-btn').style.display = 'none';
+    renderTeams();
   }, 2800);
 });
 
 socket.on('player_unsold', ({ player, unsold_count }) => {
+  document.getElementById('sb-unsold') && (document.getElementById('sb-unsold').textContent = unsold_count);
   clearInterval(cdInterval);
-  document.getElementById('sb-unsold').textContent = unsold_count;
   showOverlay('UNSOLD', player.name, '', '', false);
-  document.getElementById('player-card').classList.add('unsold-flash');
   setTimeout(() => {
     hideOverlay();
-    document.getElementById('player-card').classList.remove('unsold-flash');
-    currentPlayer = null; currentBid = 0; currentBidder = null;
-    refreshMyBidButton();
+    document.getElementById('st-name').textContent = 'Waiting for next player...';
+    document.getElementById('main-bid-btn').style.display = 'none';
   }, 2500);
 });
 
-socket.on('reshuffle', ({ count, reshuffleCount }) => {
-  const msg = reshuffleCount >= 1
-    ? `🔄 ${count} unsold players reshuffled! (Round ${reshuffleCount}/2 — auto-assign next!)`
-    : `🔄 ${count} unsold players reshuffled!`;
-  showToast(msg);
+socket.on('bid_error', ({ error }) => {
+  showToast(`⚠️ ${error}`);
+  refreshMyBidButton();
 });
 
-socket.on('auto_assign', ({ assignments }) => {
-  assignments.forEach(({ player, team }) => {
-    if (!soldPlayersMap[team.id]) soldPlayersMap[team.id] = [];
-    soldPlayersMap[team.id].push({ ...player, sold_to_team_id: team.id });
-    addBidLog(`🤝 AUTO: ${player.name} → ${team.name}`);
-  });
-  showToast(`🤝 ${assignments.length} player(s) auto-assigned to teams!`);
-  renderTeams();
-});
+function placeMyBid() {
+  if (!currentPlayer) return;
+  const myTeam = teams.find(t => t.id === MY_TEAM_ID);
+  if (!myTeam) return;
+  
+  const amt = currentBidder === null ? currentPlayer.base_price : parseFloat((currentBid + bidIncrement).toFixed(2));
+  
+  // Guard
+  if ((myTeam.purse - myTeam.spent) < amt) { showToast('Insufficient budget!'); return; }
+  if ((teamPlayerCounts[MY_TEAM_ID] || 0) >= maxPlayersPerTeam) { showToast('Squad full!'); return; }
+  
+  socket.emit('place_bid', { auctionId: parseInt(AID), teamId: MY_TEAM_ID, bidAmount: amt });
+}
 
-socket.on('auction_complete', () => {
-  clearInterval(cdInterval);
-  showToast('🏆 AUCTION COMPLETE!');
-  setTimeout(() => location.href = `/results/${AID}`, 2500);
-});
-
-socket.on('bid_error', ({ error }) => showToast(`⚠️ ${error}`));
-
-// ── Render helpers ────────────────────────────────────────────────────────────
-function renderCurrentPlayer(player, base_price) {
-  const photo = document.getElementById('st-photo');
-  if (player.photo_path) {
-    photo.innerHTML = `<img src="${player.photo_path}" alt="${player.name}">`;
+function refreshMyBidButton() {
+  const btn = document.getElementById('main-bid-btn');
+  const reason = document.getElementById('bid-reason');
+  const myTeam = teams.find(t => t.id === MY_TEAM_ID);
+  
+  if (!myTeam || !currentPlayer) return;
+  
+  const amt = currentBidder === null ? currentPlayer.base_price : parseFloat((currentBid + bidIncrement).toFixed(2));
+  const isFull = (teamPlayerCounts[MY_TEAM_ID] || 0) >= maxPlayersPerTeam;
+  const broke = (myTeam.purse - myTeam.spent) < amt;
+  const isWinning = currentBidder === MY_TEAM_ID;
+  
+  btn.disabled = isFull || broke || isWinning;
+  
+  if (isWinning) {
+    btn.textContent = 'YOU ARE HIGH BIDDER';
+    btn.classList.add('btn-outline');
+    btn.classList.remove('btn-green');
+    reason.textContent = '';
   } else {
-    const e = { Batsman:'🏏', Bowler:'🎳', 'All-Rounder':'⭐', 'Wicket-Keeper':'🧤' };
-    photo.textContent = e[player.role] || '🏏';
+    btn.textContent = `BID ₹${amt}Cr`;
+    btn.classList.add('btn-green');
+    btn.classList.remove('btn-outline');
+    
+    if (isFull) reason.textContent = 'SQUAD LIMIT REACHED';
+    else if (broke) reason.textContent = 'INSUFFICIENT BUDGET';
+    else reason.textContent = '';
   }
-  document.getElementById('st-name').textContent = player.name;
-  const roleEl = document.getElementById('st-role');
-  roleEl.className = `role-badge ${RCL[player.role] || 'rb-bat'}`;
-  roleEl.textContent = player.role;
-  document.getElementById('st-age').textContent = `Age: ${player.age || '—'}`;
-  document.getElementById('st-nat').textContent = player.nationality ? `· ${player.nationality}` : '';
-  document.getElementById('st-base').textContent = `₹${base_price}Cr`;
-  document.getElementById('st-bid').textContent  = `₹${base_price}Cr`;
 }
 
 function renderTeams() {
   const list = document.getElementById('teams-list');
-  if (!teams.length) { list.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;">Loading teams…</div>'; return; }
-
-  list.innerHTML = teams.map(t => {
-    const isMyTeam    = t.id === MY_TEAM_ID;
-    const squadCount  = teamPlayerCounts[t.id] || 0;
-    const remaining   = (t.purse - t.spent).toFixed(2);
-    const roster      = soldPlayersMap[t.id] || [];
-    const isFull      = squadCount >= maxPlayersPerTeam;
-    const isBroke     = (t.purse - t.spent) <= 0;
-    const statusTag   = isFull ? '🔒 FULL' : isBroke ? '💸 NO FUNDS' : '';
-
+  list.innerHTML = teams.map((t, i) => {
+    const isMyTeam = t.id === MY_TEAM_ID;
+    const squadCount = teamPlayerCounts[t.id] || 0;
     return `
-    <div class="watch-team-row${isMyTeam ? ' my-team' : ''}" id="trow-${t.id}" data-team-id="${t.id}">
-      <div class="wtr-header">
-        <div class="wtr-info">
-          <div class="mini-logo">${t.logo_path ? `<img src="${t.logo_path}">` : (t.emoji || '🏏')}</div>
-          <div>
-            <div style="font-family:'Rajdhani',sans-serif;font-size:.93rem;font-weight:700;">
-              ${t.name}
-              ${isMyTeam ? `<span style="font-size:.65rem;color:#00FF88;background:rgba(0,255,136,.15);padding:1px 7px;border-radius:10px;margin-left:5px;">YOU</span>` : ''}
-            </div>
-            <div class="wtr-meta">
-              💰 ₹<span id="rem-${t.id}">${remaining}</span>Cr &nbsp;·&nbsp;
-              👥 <span id="sq-${t.id}">${squadCount}/${maxPlayersPerTeam}</span>
-              ${statusTag ? `&nbsp;·&nbsp;<span style="color:var(--red);font-weight:700;font-size:.65rem;">${statusTag}</span>` : ''}
-            </div>
-          </div>
+    <div class="team-bid-row ${isMyTeam?'my-team':''}" data-team-id="${t.id}">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="mini-logo">${t.logo_path?`<img src="${t.logo_path}">`:(t.emoji||'🏏')}</div>
+        <div>
+          <div style="font-family:'Rajdhani',sans-serif;font-size:.92rem;font-weight:700;">${t.name} ${isMyTeam?'(YOU)':''}</div>
+          <div style="font-size:.7rem;color:var(--muted);">💰 ₹${(t.purse-t.spent).toFixed(2)}Cr &nbsp;·&nbsp; 👥 ${squadCount}/${maxPlayersPerTeam}</div>
         </div>
       </div>
-      ${roster.length ? `
-      <div class="wtr-roster" id="roster-${t.id}">
-        ${roster.map(p => `<span class="roster-pill">${p.name}</span>`).join('')}
-      </div>` : `<div style="font-size:.68rem;color:var(--muted);padding:4px 0;">No players yet</div>`}
+      <div>
+        ${isMyTeam ? '<span class="live-dot"></span>' : '<span class="read-only-tag">WATCHING</span>'}
+      </div>
     </div>`;
   }).join('');
 }
 
-// ── My bid button logic ────────────────────────────────────────────────────────
-function getMyTeam() { return teams.find(t => t.id === MY_TEAM_ID); }
-
-function refreshMyBidButton() {
-  const btn      = document.getElementById('my-bid-btn');
-  const reasonEl = document.getElementById('bid-reason');
-  const myTeam   = getMyTeam();
-
-  if (!currentPlayer || !myTeam) {
-    btn.disabled = true;
-    btn.textContent = '🏏 PLACE BID';
-    reasonEl.style.display = 'none';
-    return;
-  }
-
-  const isFull      = (teamPlayerCounts[MY_TEAM_ID] || 0) >= maxPlayersPerTeam;
-  const nextBid     = currentBidder === null ? currentPlayer.base_price : parseFloat((currentBid + bidIncrement).toFixed(2));
-  const cantAfford  = (myTeam.purse - myTeam.spent) < nextBid;
-  const isLeading   = currentBidder === MY_TEAM_ID;
-
-  let reason = null;
-  if (isFull)     reason = '🔒 Squad full — cannot bid';
-  else if (cantAfford) reason = `💸 Insufficient purse (₹${(myTeam.purse - myTeam.spent).toFixed(2)}Cr left)`;
-  else if (isLeading)  reason = null;
-
-  const disabled = isFull || cantAfford;
-  btn.disabled = disabled;
-
-  if (isLeading) {
-    btn.textContent = `✅ Leading — ₹${nextBid}Cr`;
-  } else {
-    btn.textContent = `🏏 BID ₹${nextBid}Cr`;
-  }
-
-  if (reason) {
-    reasonEl.innerHTML = reason;
-    reasonEl.style.display = 'flex';
-  } else {
-    reasonEl.style.display = 'none';
-  }
-}
-
-function placeMyBid() {
-  if (!currentPlayer) return;
-  const myTeam  = getMyTeam();
-  if (!myTeam) return;
-  const nextBid = currentBidder === null
-    ? currentPlayer.base_price
-    : parseFloat((currentBid + bidIncrement).toFixed(2));
-  if ((myTeam.purse - myTeam.spent) < nextBid) { showToast('Insufficient purse!'); return; }
-  if ((teamPlayerCounts[MY_TEAM_ID] || 0) >= maxPlayersPerTeam) { showToast('Squad is full!'); return; }
-  socket.emit('place_bid', { auctionId: AID, teamId: MY_TEAM_ID, bidAmount: nextBid });
-}
-
-// ── Countdown ─────────────────────────────────────────────────────────────────
 function startCountdown() {
   cdVal = 30;
-  const el = document.getElementById('countdown');
-  el.textContent = cdVal;
-  el.className = 'val countdown';
+  document.getElementById('countdown').textContent = cdVal;
   clearInterval(cdInterval);
   cdInterval = setInterval(() => {
     cdVal--;
-    el.textContent = cdVal;
-    if (cdVal <= 10) el.className = 'val countdown urgent';
-    if (cdVal <= 0)  { clearInterval(cdInterval); }
+    document.getElementById('countdown').textContent = cdVal;
+    if (cdVal <= 0) clearInterval(cdInterval);
   }, 1000);
 }
 
-// ── Overlays ──────────────────────────────────────────────────────────────────
+function addBidLog(text) {
+  const el = document.createElement('div');
+  el.className = 'blog-entry';
+  el.innerHTML = `<div class="blog-dot"></div>${text}`;
+  const parent = document.getElementById('bid-entries');
+  parent.insertBefore(el, parent.firstChild);
+}
+
 function showOverlay(word, name, price, team, isSold) {
   document.getElementById('sold-word').textContent = word;
   document.getElementById('sold-word').style.color = isSold ? 'var(--gold)' : 'var(--red)';
   document.getElementById('sold-pname').textContent = name;
   document.getElementById('sold-price').textContent = price;
-  document.getElementById('sold-team').textContent  = team;
+  document.getElementById('sold-team').textContent = team;
   document.getElementById('sold-overlay').classList.add('show');
 }
 function hideOverlay() { document.getElementById('sold-overlay').classList.remove('show'); }
 
 function confetti() {
-  const wrap = document.getElementById('confetti-wrap'); wrap.innerHTML = '';
-  const colors = ['#FFD700','#00FFFF','#FF3366','#00FF88','#BF5FFF'];
-  for (let i = 0; i < 70; i++) {
-    const el = document.createElement('div'); el.className = 'cp';
-    el.style.cssText = `left:${Math.random()*100}%;top:-20px;background:${colors[i%5]};width:${Math.random()*10+6}px;height:${Math.random()*10+6}px;border-radius:${Math.random()>.5?'50%':'3px'};animation-delay:${Math.random()}s;animation-duration:${Math.random()*2.5+1.5}s;`;
+  const wrap = document.getElementById('confetti-wrap'); wrap.innerHTML='';
+  for(let i=0;i<50;i++){
+    const el=document.createElement('div'); el.className='cp';
+    el.style.cssText=`left:${Math.random()*100}%;top:-20px;background:hsl(${Math.random()*360},70%,50%);width:10px;height:10px;border-radius:50%;animation:fall ${Math.random()*2+2}s linear forwards;`;
     wrap.appendChild(el);
   }
 }
 
-// ── Bid log ───────────────────────────────────────────────────────────────────
-function addBidLog(text) {
-  const el = document.createElement('div');
-  el.className = 'blog-entry';
-  el.innerHTML = `<div class="blog-dot"></div>${text}`;
-  const entries = document.getElementById('bid-entries');
-  entries.insertBefore(el, entries.firstChild);
-}
-
 function showToast(msg) {
-  const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3500);
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
 }
 </script>
+
+<style>
+  @keyframes fall {
+    to { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+  }
+  .cp { position: absolute; pointer-events: none; }
+</style>
+
 </body>
 </html>

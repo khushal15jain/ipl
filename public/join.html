@@ -5,184 +5,220 @@
 <title>Join Auction — IPL Auction</title>
 <link rel="stylesheet" href="/css/main.css">
 <style>
-  .join-hero {
-    min-height: 100vh;
+  :root {
+    --primary: #00FF88;
+    --secondary: #00d1ff;
+    --surface: #0f172a;
+    --bg: #020617;
+  }
+  body.page {
+    background: var(--bg);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 24px;
-    background: radial-gradient(ellipse at 50% 0%, rgba(0,255,136,.08) 0%, transparent 60%),
-                radial-gradient(ellipse at 80% 80%, rgba(0,209,255,.06) 0%, transparent 50%);
+    min-height: 100vh;
+    padding: 20px;
   }
   .join-card {
-    background: var(--surface, #1a1a2e);
-    border: 1px solid rgba(0,255,136,.25);
+    background: var(--surface);
+    border: 1px solid rgba(0, 255, 136, 0.2);
     border-radius: 20px;
-    padding: 44px 40px;
+    padding: 40px;
     width: 100%;
     max-width: 480px;
-    box-shadow: 0 0 80px rgba(0,255,136,.1), 0 24px 60px rgba(0,0,0,.4);
+    box-shadow: 0 0 80px rgba(0, 255, 136, 0.08);
+    position: relative;
+    overflow: hidden;
   }
-  .join-logo {
-    font-family: 'Orbitron', monospace;
-    font-size: 1rem;
-    color: var(--muted, #888);
+  .join-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, var(--primary), var(--secondary));
+  }
+  .logo-area {
+    text-align: center;
     margin-bottom: 32px;
+  }
+  .logo-area .ipl {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.8rem;
+    font-weight: 900;
     letter-spacing: 2px;
+    color: #fff;
   }
-  .join-logo span { color: var(--gold, #FFD700); }
-  .join-title {
-    font-family: 'Orbitron', monospace;
-    font-size: 1.6rem;
-    color: #00FF88;
-    margin-bottom: 8px;
-    line-height: 1.2;
-  }
-  .join-sub {
-    color: var(--muted, #888);
-    font-size: .86rem;
-    margin-bottom: 32px;
-  }
-  .field-label {
-    font-size: .75rem;
-    color: var(--muted, #888);
-    margin-bottom: 6px;
+  .logo-area .ipl span { color: var(--primary); }
+  
+  .input-group { margin-bottom: 20px; }
+  .input-label {
     display: block;
-    letter-spacing: .5px;
+    font-size: 0.75rem;
+    color: var(--muted);
     text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    font-weight: 600;
   }
-  .join-input {
+  .input-field {
     width: 100%;
-    background: rgba(255,255,255,.05);
-    border: 1px solid rgba(255,255,255,.12);
-    border-radius: 10px;
-    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 14px 18px;
     color: #fff;
-    font-size: .93rem;
+    font-size: 1.1rem;
     outline: none;
-    transition: border-color .2s;
-    box-sizing: border-box;
+    transition: all 0.2s;
   }
-  .join-input:focus { border-color: rgba(0,255,136,.5); }
-  .join-select {
+  .input-field:focus {
+    border-color: var(--primary);
+    background: rgba(0, 255, 136, 0.03);
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.1);
+  }
+  .input-field.code {
+    text-transform: uppercase;
+    font-family: 'Orbitron', monospace;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-align: center;
+  }
+  
+  .btn-join {
     width: 100%;
-    background: rgba(255,255,255,.05);
-    border: 1px solid rgba(255,255,255,.12);
-    border-radius: 10px;
-    padding: 12px 16px;
-    color: #fff;
-    font-size: .93rem;
-    outline: none;
+    padding: 16px;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: 'Orbitron', sans-serif;
+    cursor: pointer;
+    border: none;
+    background: linear-gradient(135deg, var(--primary), #00cc6e);
+    color: #000;
+    transition: all 0.3s;
+    margin-top: 10px;
+    box-shadow: 0 4px 20px rgba(0, 255, 136, 0.2);
+  }
+  .btn-join:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 255, 136, 0.3);
+  }
+  .btn-join:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: grayscale(0.5);
+  }
+  
+  #join-status {
+    text-align: center;
+    font-size: 0.85rem;
+    margin-top: 12px;
+    min-height: 20px;
+  }
+  
+  select.input-field {
     appearance: none;
     cursor: pointer;
-    transition: border-color .2s;
-    box-sizing: border-box;
   }
-  .join-select:focus { border-color: rgba(0,255,136,.5); }
-  .join-select option { background: #1a1a2e; }
-  .status-msg {
-    font-size: .74rem;
-    margin-top: 7px;
-    min-height: 18px;
-    transition: color .2s;
-  }
-  .field-group { margin-bottom: 20px; }
-  .find-row { display: flex; gap: 8px; }
-  .find-row .join-input { flex: 1; }
 </style>
 </head>
-<body style="background:var(--bg,#0d0d1a);margin:0;">
+<body class="page">
 
-<div class="join-hero">
-  <div class="join-card">
-    <div class="join-logo">IPL <span>AUCTION</span></div>
-    <div class="join-title">🎯 Join Auction</div>
-    <div class="join-sub">Enter the tournament name and select your team to start bidding in real-time.</div>
+<div class="join-card">
+  <div class="logo-area">
+    <div class="ipl">IPL <span>AUCTION</span></div>
+    <div style="color:var(--muted);font-size:0.88rem;margin-top:8px;">Participant Entry Portal</div>
+  </div>
 
-    <div class="field-group">
-      <label class="field-label" for="j-name">Tournament Name</label>
-      <div class="find-row">
-        <input id="j-name" class="join-input" type="text" placeholder="e.g. IPL 2025" autocomplete="off">
-        <button class="btn btn-outline btn-sm" id="btn-find" onclick="lookupTournament()">FIND</button>
-      </div>
-      <div id="j-status" class="status-msg"></div>
+  <div class="input-group">
+    <label class="input-label">Enter Join Code</label>
+    <input type="text" id="join-code" class="input-field code" placeholder="IPL1234" maxlength="10">
+    <div id="join-status"></div>
+  </div>
+
+  <div id="team-selection" style="display:none;">
+    <div class="input-group">
+      <label class="input-label">Select Your Team</label>
+      <select id="team-select" class="input-field" style="font-family:'Rajdhani',sans-serif;font-weight:700;">
+        <option value="">— CHOOSE TEAM —</option>
+      </select>
     </div>
+  </div>
 
-    <div id="team-section" style="display:none;">
-      <div class="field-group">
-        <label class="field-label" for="j-team">Your Team</label>
-        <select id="j-team" class="join-select">
-          <option value="">— Select a team —</option>
-        </select>
-      </div>
-
-      <button class="btn btn-green" id="btn-join" onclick="submitJoin()" style="width:100%;padding:14px;font-size:.95rem;" disabled>
-        🏏 JOIN AUCTION →
-      </button>
-    </div>
-
-    <div style="margin-top:24px;text-align:center;font-size:.76rem;color:var(--muted);">
-      Are you the auction host? <a href="/login" style="color:var(--cyan);text-decoration:none;">Log in instead →</a>
-    </div>
+  <button id="btn-submit" class="btn-join" disabled>JOIN TOURNAMENT →</button>
+  
+  <div style="text-align:center;margin-top:24px;">
+    <a href="/login" style="color:var(--muted);font-size:0.8rem;text-decoration:none;">Admin Login</a>
   </div>
 </div>
 
 <script>
-let auctionData = null;
+  const codeInput = document.getElementById('join-code');
+  const teamSelect = document.getElementById('team-select');
+  const btnSubmit = document.getElementById('btn-submit');
+  const statusEl = document.getElementById('join-status');
+  const teamSection = document.getElementById('team-selection');
+  
+  let currentAuction = null;
+  let timer = null;
 
-document.getElementById('j-name').addEventListener('keydown', e => {
-  if (e.key === 'Enter') lookupTournament();
-});
-
-document.getElementById('j-team').addEventListener('change', function() {
-  document.getElementById('btn-join').disabled = !this.value;
-});
-
-async function lookupTournament() {
-  const name = document.getElementById('j-name').value.trim();
-  const statusEl = document.getElementById('j-status');
-  const btn = document.getElementById('btn-find');
-  if (!name) { statusEl.textContent = '⚠️ Please enter a tournament name.'; statusEl.style.color = 'var(--red)'; return; }
-
-  btn.disabled = true; btn.textContent = '...';
-  statusEl.textContent = 'Searching...'; statusEl.style.color = 'var(--muted)';
-
-  try {
-    const r = await fetch(`/api/auctions/public/${encodeURIComponent(name)}/teams`);
-    if (!r.ok) {
-      statusEl.textContent = '❌ Tournament not found. Check the name and try again.';
-      statusEl.style.color = 'var(--red)';
-      document.getElementById('team-section').style.display = 'none';
-      return;
+  codeInput.addEventListener('input', () => {
+    statusEl.textContent = '';
+    teamSection.style.display = 'none';
+    btnSubmit.disabled = true;
+    
+    clearTimeout(timer);
+    if (codeInput.value.length >= 4) {
+      timer = setTimeout(verifyCode, 600);
     }
-    const { auction, teams } = await r.json();
-    auctionData = auction;
-    statusEl.textContent = `✅ Found: "${auction.name}" · ${auction.status.toUpperCase()} · ${teams.length} teams`;
-    statusEl.style.color = 'var(--green)';
+  });
 
-    const sel = document.getElementById('j-team');
-    sel.innerHTML = '<option value="">— Select a team —</option>' +
-      teams.map(t => `<option value="${t.id}">${t.emoji || '🏏'} ${t.name}</option>`).join('');
-    document.getElementById('team-section').style.display = 'block';
-    document.getElementById('btn-join').disabled = true;
-  } catch(e) {
-    statusEl.textContent = '❌ Connection error. Is the server running?';
-    statusEl.style.color = 'var(--red)';
-  } finally {
-    btn.disabled = false; btn.textContent = 'FIND';
+  async function verifyCode() {
+    const code = codeInput.value.trim().toUpperCase();
+    if (!code) return;
+
+    statusEl.textContent = 'Verifying...';
+    statusEl.style.color = 'var(--muted)';
+
+    try {
+      const r = await fetch(`/api/auctions/public/join/${code}`);
+      if (!r.ok) {
+        statusEl.textContent = '❌ Invalid Join Code';
+        statusEl.style.color = '#ff4d4d';
+        return;
+      }
+
+      const { auction, teams } = await r.json();
+      currentAuction = auction;
+      
+      statusEl.textContent = `✅ Found: ${auction.name}`;
+      statusEl.style.color = 'var(--primary)';
+      
+      teamSelect.innerHTML = '<option value="">— CHOOSE TEAM —</option>' +
+        teams.map(t => `<option value="${t.id}">${t.emoji || '🏏'} ${t.name}</option>`).join('');
+      
+      teamSection.style.display = 'block';
+    } catch (e) {
+      statusEl.textContent = '❌ Connection Error';
+      statusEl.style.color = '#ff4d4d';
+    }
   }
-}
 
-function submitJoin() {
-  const sel = document.getElementById('j-team');
-  if (!sel.value || !auctionData) return;
-  const text = sel.options[sel.selectedIndex].text;
-  const teamName = text.replace(/^\S+\s/, '').trim(); // strip emoji prefix
-  localStorage.setItem('viewer_auction_id', auctionData.id);
-  localStorage.setItem('viewer_team_id', sel.value);
-  localStorage.setItem('viewer_team_name', teamName);
-  location.href = `/watch/${auctionData.id}`;
-}
+  teamSelect.addEventListener('change', () => {
+    btnSubmit.disabled = !teamSelect.value;
+  });
+
+  btnSubmit.addEventListener('click', () => {
+    if (!currentAuction || !teamSelect.value) return;
+    
+    const teamName = teamSelect.options[teamSelect.selectedIndex].text.replace(/^[^a-zA-Z]+/, '').trim();
+    
+    localStorage.setItem('viewer_auction_id', currentAuction.id);
+    localStorage.setItem('viewer_team_id',    teamSelect.value);
+    localStorage.setItem('viewer_team_name',  teamName);
+    
+    location.href = `/watch/${currentAuction.id}`;
+  });
 </script>
+
 </body>
 </html>

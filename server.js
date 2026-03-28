@@ -57,10 +57,19 @@ io.on('connection', (socket) => {
   console.log('🔌 Client connected:', socket.id);
 
   // Join auction room
-  socket.on('join_auction', ({ auctionId }) => {
-    socket.join(`auction_${auctionId}`);
+  socket.on('join_auction', ({ auctionId, teamId }) => {
     const db = getDB();
     const auction = db.prepare('SELECT * FROM auctions WHERE id=?').get(auctionId);
+    if (!auction) return socket.emit('error', { message: 'Auction not found' });
+
+    // Validate team belongs to auction if teamId is provided
+    if (teamId) {
+      const team = db.prepare('SELECT id FROM teams WHERE id=? AND auction_id=?').get(teamId, auctionId);
+      if (!team) return socket.emit('error', { message: 'Invalid team for this auction' });
+      socket.joinedTeamId = teamId;
+    }
+
+    socket.join(`auction_${auctionId}`);
     const teams   = db.prepare('SELECT * FROM teams WHERE auction_id=? ORDER BY id').all(auctionId);
     const pending = db.prepare("SELECT * FROM players WHERE auction_id=? AND status='pending' ORDER BY RANDOM()").all(auctionId);
     const sold    = db.prepare("SELECT COUNT(*) AS c FROM players WHERE auction_id=? AND status='sold'").get(auctionId).c;
@@ -86,7 +95,7 @@ io.on('connection', (socket) => {
       room: auctionRooms[auctionId] || null,
       soldPlayers,
     });
-    console.log(`📺 Joined auction room ${auctionId}`);
+    console.log(`📺 Joined auction room ${auctionId} ${teamId ? `as team ${teamId}` : '(Admin/Viewer)'}`);
   });
 
   // Start / next player
@@ -178,12 +187,17 @@ io.on('connection', (socket) => {
 
   // Place bid
   socket.on('place_bid', ({ auctionId, teamId, bidAmount }) => {
+    // Security Guard: If join_auction was called with a teamId, enforce it
+    if (socket.joinedTeamId && socket.joinedTeamId !== teamId) {
+      return socket.emit('bid_error', { error: 'Unauthorized: You can only bid for your assigned team.' });
+    }
+
     const room = auctionRooms[auctionId];
     if (!room) return;
 
     const db = getDB();
-    const team = db.prepare('SELECT * FROM teams WHERE id=?').get(teamId);
-    if (!team) return;
+    const team = db.prepare('SELECT * FROM teams WHERE id=? AND auction_id=?').get(teamId, auctionId);
+    if (!team) return socket.emit('bid_error', { error: 'Invalid team/auction' });
 
     const auction    = db.prepare('SELECT * FROM auctions WHERE id=?').get(auctionId);
     const maxPlayers = auction ? (auction.max_players_per_team || 11) : 11;
