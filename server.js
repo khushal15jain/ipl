@@ -2,10 +2,9 @@ require('dotenv').config();
 const express    = require('express');
 const http       = require('http');
 const path = require("path");
-const dbPath = path.join("/data", "auction.db");
 const cookieParser = require('cookie-parser');
 const { Server } = require('socket.io');
-const { getDB, logEvent } = require('./db/database');
+const { pool, logEvent, getDB } = require('./db/database');
 const { authMiddleware } = require('./middleware/auth');
 
 const app    = express();
@@ -13,7 +12,6 @@ const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*' } });
 
 const PORT = process.env.PORT || 3000;
-
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
@@ -41,15 +39,15 @@ app.get('/watch/:id', (req, res) => res.sendFile('watch.html', { root: './public
 const auctionRooms = {};
 
 // Helper: count players owned by each team in an auction
-function getTeamPlayerCounts(auctionId, db) {
-  const rows = db.prepare(`
+async function getTeamPlayerCounts(auctionId) {
+  const result = await pool.query(`
     SELECT sold_to_team_id AS team_id, COUNT(*) AS count
     FROM players
-    WHERE auction_id = ? AND status IN ('sold','retained')
+    WHERE auction_id = $1 AND status IN ('sold','retained')
     GROUP BY sold_to_team_id
-  `).all(auctionId);
+  `, [auctionId]);
   const map = {};
-  rows.forEach(r => { map[r.team_id] = r.count; });
+  result.rows.forEach(r => { map[r.team_id] = parseInt(r.count); });
   return map;
 }
 
@@ -57,226 +55,237 @@ io.on('connection', (socket) => {
   console.log('🔌 Client connected:', socket.id);
 
   // Join auction room
-  socket.on('join_auction', ({ auctionId, teamId }) => {
-    const db = getDB();
-    const auction = db.prepare('SELECT * FROM auctions WHERE id=?').get(auctionId);
-    if (!auction) return socket.emit('error', { message: 'Auction not found' });
+  socket.on('join_auction', async ({ auctionId, teamId }) => {
+    try {
+      const auctionRes = await pool.query('SELECT * FROM auctions WHERE id=$1', [auctionId]);
+      const auction = auctionRes.rows[0];
+      if (!auction) return socket.emit('error', { message: 'Auction not found' });
 
-    // Validate team belongs to auction if teamId is provided
-    if (teamId) {
-      const team = db.prepare('SELECT id FROM teams WHERE id=? AND auction_id=?').get(teamId, auctionId);
-      if (!team) return socket.emit('error', { message: 'Invalid team for this auction' });
-      socket.joinedTeamId = teamId;
+      // Validate team belongs to auction if teamId is provided
+      if (teamId) {
+        const teamRes = await pool.query('SELECT id FROM teams WHERE id=$1 AND auction_id=$2', [teamId, auctionId]);
+        if (teamRes.rowCount === 0) return socket.emit('error', { message: 'Invalid team for this auction' });
+        socket.joinedTeamId = teamId;
+      }
+
+      socket.join(`auction_${auctionId}`);
+      
+      const teamsRes = await pool.query('SELECT * FROM teams WHERE auction_id=$1 ORDER BY id', [auctionId]);
+      const pendingRes = await pool.query("SELECT * FROM players WHERE auction_id=$1 AND status='pending'", [auctionId]);
+      const soldRes = await pool.query("SELECT COUNT(*) AS c FROM players WHERE auction_id=$1 AND status='sold'", [auctionId]);
+      const unsoldRes = await pool.query("SELECT COUNT(*) AS c FROM players WHERE auction_id=$1 AND status='unsold'", [auctionId]);
+
+      const playerCounts = await getTeamPlayerCounts(auctionId);
+
+      // Fetch sold/retained players for viewer team rosters
+      const soldPlayersRes = await pool.query(
+        `SELECT p.*, t.name AS team_name FROM players p
+         JOIN teams t ON t.id = p.sold_to_team_id
+         WHERE p.auction_id = $1 AND p.status IN ('sold','retained')
+         ORDER BY p.id`,
+        [auctionId]
+      );
+
+      socket.emit('auction_state', {
+        teams: teamsRes.rows,
+        auction,
+        playerCounts,
+        pending_count: pendingRes.rowCount,
+        sold_count: parseInt(soldRes.rows[0].c),
+        unsold_count: parseInt(unsoldRes.rows[0].c),
+        room: auctionRooms[auctionId] || null,
+        soldPlayers: soldPlayersRes.rows,
+      });
+      console.log(`📺 Joined auction room ${auctionId} ${teamId ? `as team ${teamId}` : '(Admin/Viewer)'}`);
+    } catch (err) {
+      console.error(err);
+      socket.emit('error', { message: 'Database error' });
     }
-
-    socket.join(`auction_${auctionId}`);
-    const teams   = db.prepare('SELECT * FROM teams WHERE auction_id=? ORDER BY id').all(auctionId);
-    const pending = db.prepare("SELECT * FROM players WHERE auction_id=? AND status='pending' ORDER BY RANDOM()").all(auctionId);
-    const sold    = db.prepare("SELECT COUNT(*) AS c FROM players WHERE auction_id=? AND status='sold'").get(auctionId).c;
-    const unsold  = db.prepare("SELECT COUNT(*) AS c FROM players WHERE auction_id=? AND status='unsold'").get(auctionId).c;
-
-    const playerCounts = getTeamPlayerCounts(auctionId, db);
-
-    // Fetch sold/retained players for viewer team rosters
-    const soldPlayers = db.prepare(
-      `SELECT p.*, t.name AS team_name FROM players p
-       JOIN teams t ON t.id = p.sold_to_team_id
-       WHERE p.auction_id = ? AND p.status IN ('sold','retained')
-       ORDER BY p.id`
-    ).all(auctionId);
-
-    socket.emit('auction_state', {
-      teams,
-      auction,
-      playerCounts,
-      pending_count: pending.length,
-      sold_count: sold,
-      unsold_count: unsold,
-      room: auctionRooms[auctionId] || null,
-      soldPlayers,
-    });
-    console.log(`📺 Joined auction room ${auctionId} ${teamId ? `as team ${teamId}` : '(Admin/Viewer)'}`);
   });
 
   // Start / next player
-  socket.on('next_player', ({ auctionId }) => {
-    const db = getDB();
-    const auction = db.prepare('SELECT * FROM auctions WHERE id=?').get(auctionId);
-    const maxPlayers = auction ? (auction.max_players_per_team || 11) : 11;
+  socket.on('next_player', async ({ auctionId }) => {
+    try {
+      const auctionRes = await pool.query('SELECT * FROM auctions WHERE id=$1', [auctionId]);
+      const auction = auctionRes.rows[0];
+      const maxPlayers = auction ? (auction.max_players_per_team || 11) : 11;
 
-    const player = db.prepare("SELECT * FROM players WHERE auction_id=? AND status='pending' ORDER BY RANDOM() LIMIT 1").get(auctionId);
+      const playerRes = await pool.query("SELECT * FROM players WHERE auction_id=$1 AND status='pending' ORDER BY RANDOM() LIMIT 1", [auctionId]);
+      const player = playerRes.rows[0];
 
-    if (!player) {
-      // --- No pending players ---
-      const unsoldCount = db.prepare("SELECT COUNT(*) AS c FROM players WHERE auction_id=? AND status='unsold'").get(auctionId).c;
+      if (!player) {
+        // --- No pending players ---
+        const unsoldCountRes = await pool.query("SELECT COUNT(*) AS c FROM players WHERE auction_id=$1 AND status='unsold'", [auctionId]);
+        const unsoldCount = parseInt(unsoldCountRes.rows[0].c);
 
-      if (unsoldCount > 0) {
-        // Increment reshuffle counter
-        if (!auctionRooms[auctionId]) auctionRooms[auctionId] = { reshuffleCount: 0 };
-        auctionRooms[auctionId].reshuffleCount = (auctionRooms[auctionId].reshuffleCount || 0) + 1;
-        const reshuffleCount = auctionRooms[auctionId].reshuffleCount;
+        if (unsoldCount > 0) {
+          if (!auctionRooms[auctionId]) auctionRooms[auctionId] = { reshuffleCount: 0 };
+          auctionRooms[auctionId].reshuffleCount = (auctionRooms[auctionId].reshuffleCount || 0) + 1;
+          const reshuffleCount = auctionRooms[auctionId].reshuffleCount;
 
-        if (reshuffleCount >= 2) {
-          // ── AUTO-ASSIGN after 2+ reshuffles ──────────────────────────────
-          const unsoldPlayers = db.prepare("SELECT * FROM players WHERE auction_id=? AND status='unsold'").all(auctionId);
-          const allTeams      = db.prepare('SELECT * FROM teams WHERE auction_id=? ORDER BY id').all(auctionId);
-          const playerCounts  = getTeamPlayerCounts(auctionId, db);
+          if (reshuffleCount >= 2) {
+            // ── AUTO-ASSIGN after 2+ reshuffles ──────────────────────────────
+            const unsoldPlayersRes = await pool.query("SELECT * FROM players WHERE auction_id=$1 AND status='unsold'", [auctionId]);
+            const unsoldPlayers = unsoldPlayersRes.rows;
+            
+            const allTeamsRes = await pool.query('SELECT * FROM teams WHERE auction_id=$1 ORDER BY id', [auctionId]);
+            const allTeams = allTeamsRes.rows;
+            
+            const playerCounts = await getTeamPlayerCounts(auctionId);
 
-          // Teams that still need players (under quota)
-          const needyTeams = allTeams.filter(t => (playerCounts[t.id] || 0) < maxPlayers);
+            const needyTeams = allTeams.filter(t => (playerCounts[t.id] || 0) < maxPlayers);
+            const assignments = [];
 
-          const assignments = [];
+            if (needyTeams.length > 0) {
+              for (let i = 0; i < unsoldPlayers.length; i++) {
+                const p = unsoldPlayers[i];
+                const target = needyTeams[i % needyTeams.length];
+                await pool.query("UPDATE players SET status='sold', sold_to_team_id=$1, sold_price=0 WHERE id=$2", [target.id, p.id]);
+                await logEvent(auctionId, 'AUTO_ASSIGN', `${p.name} auto-assigned to ${target.name}`, p.id, target.id, 0);
+                assignments.push({ player: p, team: target });
+                playerCounts[target.id] = (playerCounts[target.id] || 0) + 1;
+              }
+            }
 
-          if (needyTeams.length > 0) {
-            unsoldPlayers.forEach((p, idx) => {
-              const target = needyTeams[idx % needyTeams.length];
-              // Assign for free (₹0) — team has no budget obligation in auto-assign
-              db.prepare("UPDATE players SET status='sold', sold_to_team_id=?, sold_price=0 WHERE id=?")
-                .run(target.id, p.id);
-              logEvent(auctionId, 'AUTO_ASSIGN', `${p.name} auto-assigned to ${target.name}`, p.id, target.id, 0);
-              assignments.push({ player: p, team: target });
-              // Update local count so round-robin distributes evenly
-              playerCounts[target.id] = (playerCounts[target.id] || 0) + 1;
-            });
+            io.to(`auction_${auctionId}`).emit('auto_assign', { assignments });
+            await pool.query("UPDATE auctions SET status='completed', completed_at=CURRENT_TIMESTAMP WHERE id=$1", [auctionId]);
+            await logEvent(auctionId, 'AUCTION_COMPLETE', 'Auction completed (with auto-assign)');
+            const stats = await getAuctionStats(auctionId);
+            io.to(`auction_${auctionId}`).emit('auction_complete', stats);
+
           } else {
-            // All teams full — just mark remaining unsold as truly unsold (leave them)
-            console.log('All teams full, cannot auto-assign remaining unsold players.');
+            // Normal reshuffle
+            await pool.query("UPDATE players SET status='pending' WHERE auction_id=$1 AND status='unsold'", [auctionId]);
+            await logEvent(auctionId, 'RESHUFFLE', `${unsoldCount} unsold players reshuffled (round ${reshuffleCount})`);
+            io.to(`auction_${auctionId}`).emit('reshuffle', { count: unsoldCount, reshuffleCount });
+
+            const reshuffledRes = await pool.query("SELECT * FROM players WHERE auction_id=$1 AND status='pending' ORDER BY RANDOM() LIMIT 1", [auctionId]);
+            if (reshuffledRes.rowCount > 0) await sendPlayer(auctionId, reshuffledRes.rows[0]);
+            else io.to(`auction_${auctionId}`).emit('auction_complete', await getAuctionStats(auctionId));
           }
-
-          io.to(`auction_${auctionId}`).emit('auto_assign', { assignments });
-
-          // Mark auction complete
-          db.prepare("UPDATE auctions SET status='completed', completed_at=datetime('now','localtime') WHERE id=?").run(auctionId);
-          logEvent(auctionId, 'AUCTION_COMPLETE', 'Auction completed (with auto-assign)');
-          io.to(`auction_${auctionId}`).emit('auction_complete', getAuctionStats(auctionId, db));
-
         } else {
-          // Normal reshuffle (first time)
-          db.prepare("UPDATE players SET status='pending' WHERE auction_id=? AND status='unsold'").run(auctionId);
-          logEvent(auctionId, 'RESHUFFLE', `${unsoldCount} unsold players reshuffled (round ${reshuffleCount})`);
-          io.to(`auction_${auctionId}`).emit('reshuffle', { count: unsoldCount, reshuffleCount });
-
-          const reshuffled = db.prepare("SELECT * FROM players WHERE auction_id=? AND status='pending' ORDER BY RANDOM() LIMIT 1").get(auctionId);
-          if (reshuffled) sendPlayer(auctionId, reshuffled, db);
-          else io.to(`auction_${auctionId}`).emit('auction_complete', getAuctionStats(auctionId, db));
+          // Complete
+          io.to(`auction_${auctionId}`).emit('auction_complete', await getAuctionStats(auctionId));
+          await pool.query("UPDATE auctions SET status='completed', completed_at=CURRENT_TIMESTAMP WHERE id=$1", [auctionId]);
+          await logEvent(auctionId, 'AUCTION_COMPLETE', 'Auction completed');
         }
-      } else {
-        // No unsold either — auction is done
-        io.to(`auction_${auctionId}`).emit('auction_complete', getAuctionStats(auctionId, db));
-        db.prepare("UPDATE auctions SET status='completed', completed_at=datetime('now','localtime') WHERE id=?").run(auctionId);
-        logEvent(auctionId, 'AUCTION_COMPLETE', 'Auction completed');
+        return;
       }
-      return;
-    }
 
-    sendPlayer(auctionId, player, db);
+      await sendPlayer(auctionId, player);
+    } catch (err) { console.error(err); }
   });
 
-  function sendPlayer(auctionId, player, db) {
+  async function sendPlayer(auctionId, player) {
     if (!auctionRooms[auctionId]) auctionRooms[auctionId] = { reshuffleCount: 0 };
     auctionRooms[auctionId] = {
       ...auctionRooms[auctionId],
       currentPlayer: player,
-      currentBid: player.base_price,
+      currentBid: parseFloat(player.base_price),
       currentBidder: null,
       started: true,
     };
-    db.prepare("UPDATE auctions SET current_player_id=? WHERE id=?").run(player.id, auctionId);
+    await pool.query("UPDATE auctions SET current_player_id=$1 WHERE id=$2", [player.id, auctionId]);
     io.to(`auction_${auctionId}`).emit('player_up', { player, base_price: player.base_price });
   }
 
   // Place bid
-  socket.on('place_bid', ({ auctionId, teamId, bidAmount }) => {
-    // Security Guard: If join_auction was called with a teamId, enforce it
-    if (socket.joinedTeamId && socket.joinedTeamId !== teamId) {
-      return socket.emit('bid_error', { error: 'Unauthorized: You can only bid for your assigned team.' });
-    }
+  socket.on('place_bid', async ({ auctionId, teamId, bidAmount }) => {
+    try {
+      if (socket.joinedTeamId && socket.joinedTeamId !== teamId) {
+        return socket.emit('bid_error', { error: 'Unauthorized' });
+      }
 
-    const room = auctionRooms[auctionId];
-    if (!room) return;
+      const room = auctionRooms[auctionId];
+      if (!room) return;
 
-    const db = getDB();
-    const team = db.prepare('SELECT * FROM teams WHERE id=? AND auction_id=?').get(teamId, auctionId);
-    if (!team) return socket.emit('bid_error', { error: 'Invalid team/auction' });
+      const teamRes = await pool.query('SELECT * FROM teams WHERE id=$1 AND auction_id=$2', [teamId, auctionId]);
+      const team = teamRes.rows[0];
+      if (!team) return socket.emit('bid_error', { error: 'Invalid team' });
 
-    const auction    = db.prepare('SELECT * FROM auctions WHERE id=?').get(auctionId);
-    const maxPlayers = auction ? (auction.max_players_per_team || 11) : 11;
+      const auctionRes = await pool.query('SELECT * FROM auctions WHERE id=$1', [auctionId]);
+      const auction = auctionRes.rows[0];
+      const maxPlayers = auction ? (auction.max_players_per_team || 11) : 11;
 
-    // Guard 1: Team purse check
-    const remaining = team.purse - team.spent;
-    if (remaining < bidAmount) {
-      socket.emit('bid_error', { error: 'Insufficient purse' });
-      return;
-    }
+      if ((team.purse - team.spent) < bidAmount) {
+        return socket.emit('bid_error', { error: 'Insufficient purse' });
+      }
 
-    // Guard 2: Full squad check
-    const playerCounts = getTeamPlayerCounts(auctionId, db);
-    const ownedCount   = playerCounts[teamId] || 0;
-    if (ownedCount >= maxPlayers) {
-      socket.emit('bid_error', { error: `Squad full (${maxPlayers}/${maxPlayers} players)` });
-      return;
-    }
+      const playerCounts = await getTeamPlayerCounts(auctionId);
+      if ((playerCounts[teamId] || 0) >= maxPlayers) {
+        return socket.emit('bid_error', { error: 'Squad full' });
+      }
 
-    // Record bid
-    db.prepare('INSERT INTO bids (auction_id, player_id, team_id, bid_amount) VALUES (?,?,?,?)')
-      .run(auctionId, room.currentPlayer.id, teamId, bidAmount);
+      await pool.query('INSERT INTO bids (auction_id, player_id, team_id, bid_amount) VALUES ($1,$2,$3,$4)',
+        [auctionId, room.currentPlayer.id, teamId, bidAmount]);
 
-    room.currentBid    = bidAmount;
-    room.currentBidder = teamId;
+      room.currentBid    = bidAmount;
+      room.currentBidder = teamId;
 
-    io.to(`auction_${auctionId}`).emit('bid_placed', {
-      teamId,
-      teamName: team.name,
-      bidAmount,
-      player: room.currentPlayer,
-    });
+      io.to(`auction_${auctionId}`).emit('bid_placed', {
+        teamId,
+        teamName: team.name,
+        bidAmount,
+        player: room.currentPlayer,
+      });
+    } catch (err) { console.error(err); }
   });
 
   // Confirm sold
-  socket.on('confirm_sold', ({ auctionId }) => {
-    const room = auctionRooms[auctionId];
-    if (!room || !room.currentBidder) return;
+  socket.on('confirm_sold', async ({ auctionId }) => {
+    try {
+      const room = auctionRooms[auctionId];
+      if (!room || !room.currentBidder) return;
 
-    const db = getDB();
-    const { currentPlayer, currentBid, currentBidder } = room;
-    const team = db.prepare('SELECT * FROM teams WHERE id=?').get(currentBidder);
+      const { currentPlayer, currentBid, currentBidder } = room;
+      const teamRes = await pool.query('SELECT * FROM teams WHERE id=$1', [currentBidder]);
+      const team = teamRes.rows[0];
 
-    db.prepare("UPDATE players SET status='sold', sold_to_team_id=?, sold_price=? WHERE id=?")
-      .run(currentBidder, currentBid, currentPlayer.id);
-    db.prepare('UPDATE teams SET spent=spent+? WHERE id=?').run(currentBid, currentBidder);
-    db.prepare('UPDATE bids SET is_winning=1 WHERE player_id=? AND team_id=? ORDER BY id DESC LIMIT 1')
-      .run(currentPlayer.id, currentBidder);
+      await pool.query("UPDATE players SET status='sold', sold_to_team_id=$1, sold_price=$2 WHERE id=$3",
+        [currentBidder, currentBid, currentPlayer.id]);
+      await pool.query('UPDATE teams SET spent=spent+$1 WHERE id=$2', [currentBid, currentBidder]);
+      
+      await pool.query(`
+        UPDATE bids SET is_winning=1 WHERE id = (
+          SELECT id FROM bids WHERE player_id=$1 AND team_id=$2 ORDER BY id DESC LIMIT 1
+        )
+      `, [currentPlayer.id, currentBidder]);
 
-    logEvent(auctionId, 'PLAYER_SOLD', `${currentPlayer.name} → ${team?.name} ₹${currentBid}Cr`, currentPlayer.id, currentBidder, currentBid);
+      await logEvent(auctionId, 'PLAYER_SOLD', `${currentPlayer.name} → ${team?.name} ₹${currentBid}Cr`, currentPlayer.id, currentBidder, currentBid);
 
-    const updatedPlayerCounts = getTeamPlayerCounts(auctionId, db);
+      const updatedPlayerCounts = await getTeamPlayerCounts(auctionId);
+      const soldCountRes = await pool.query("SELECT COUNT(*) AS c FROM players WHERE auction_id=$1 AND status='sold'", [auctionId]);
 
-    io.to(`auction_${auctionId}`).emit('player_sold', {
-      player: currentPlayer,
-      team,
-      price: currentBid,
-      sold_count: db.prepare("SELECT COUNT(*) AS c FROM players WHERE auction_id=? AND status='sold'").get(auctionId).c,
-      playerCounts: updatedPlayerCounts,
-    });
+      io.to(`auction_${auctionId}`).emit('player_sold', {
+        player: currentPlayer,
+        team,
+        price: currentBid,
+        sold_count: parseInt(soldCountRes.rows[0].c),
+        playerCounts: updatedPlayerCounts,
+      });
 
-    auctionRooms[auctionId] = { ...room, currentPlayer: null, currentBid: 0, currentBidder: null };
+      auctionRooms[auctionId] = { ...room, currentPlayer: null, currentBid: 0, currentBidder: null };
+    } catch (err) { console.error(err); }
   });
 
   // Mark unsold
-  socket.on('mark_unsold', ({ auctionId }) => {
-    const room = auctionRooms[auctionId];
-    if (!room?.currentPlayer) return;
+  socket.on('mark_unsold', async ({ auctionId }) => {
+    try {
+      const room = auctionRooms[auctionId];
+      if (!room?.currentPlayer) return;
 
-    const db = getDB();
-    db.prepare("UPDATE players SET status='unsold' WHERE id=?").run(room.currentPlayer.id);
-    logEvent(auctionId, 'PLAYER_UNSOLD', `${room.currentPlayer.name} went unsold`, room.currentPlayer.id);
+      await pool.query("UPDATE players SET status='unsold' WHERE id=$1", [room.currentPlayer.id]);
+      await logEvent(auctionId, 'PLAYER_UNSOLD', `${room.currentPlayer.name} went unsold`, room.currentPlayer.id);
 
-    io.to(`auction_${auctionId}`).emit('player_unsold', {
-      player: room.currentPlayer,
-      unsold_count: db.prepare("SELECT COUNT(*) AS c FROM players WHERE auction_id=? AND status='unsold'").get(auctionId).c,
-    });
+      const unsoldCountRes = await pool.query("SELECT COUNT(*) AS c FROM players WHERE auction_id=$1 AND status='unsold'", [auctionId]);
+      
+      io.to(`auction_${auctionId}`).emit('player_unsold', {
+        player: room.currentPlayer,
+        unsold_count: parseInt(unsoldCountRes.rows[0].c),
+      });
 
-    auctionRooms[auctionId] = { ...room, currentPlayer: null, currentBid: 0, currentBidder: null };
+      auctionRooms[auctionId] = { ...room, currentPlayer: null, currentBid: 0, currentBidder: null };
+    } catch (err) { console.error(err); }
   });
 
   // Reset bid
@@ -291,18 +300,25 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => console.log('🔌 Disconnected:', socket.id));
 });
 
-function getAuctionStats(auctionId, db) {
+async function getAuctionStats(auctionId) {
+  const soldRes = await pool.query("SELECT COUNT(*) AS c FROM players WHERE auction_id=$1 AND status='sold'", [auctionId]);
+  const unsoldRes = await pool.query("SELECT COUNT(*) AS c FROM players WHERE auction_id=$1 AND status='unsold'", [auctionId]);
+  const spentRes = await pool.query('SELECT SUM(spent) AS s FROM teams WHERE auction_id=$1', [auctionId]);
+  
   return {
-    sold:   db.prepare("SELECT COUNT(*) AS c FROM players WHERE auction_id=? AND status='sold'").get(auctionId).c,
-    unsold: db.prepare("SELECT COUNT(*) AS c FROM players WHERE auction_id=? AND status='unsold'").get(auctionId).c,
-    spent:  db.prepare('SELECT SUM(spent) AS s FROM teams WHERE auction_id=?').get(auctionId).s || 0,
+    sold:   parseInt(soldRes.rows[0].c),
+    unsold: parseInt(unsoldRes.rows[0].c),
+    spent:  parseFloat(spentRes.rows[0].s || 0),
   };
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
-getDB(); // Initialize DB on startup
-server.listen(PORT, () => {
-  console.log(`\n🏏 IPL Auction Server running at http://localhost:${PORT}`);
-  console.log(`📦 Database: ${path.join(__dirname, 'auction.db')}`);
-  console.log(`🗂️  Uploads:  ${path.join(__dirname, 'public/uploads')}\n`);
+getDB().then(() => {
+  server.listen(PORT, () => {
+    console.log(`\n🏏 IPL Auction Server running at http://localhost:${PORT}`);
+    console.log(`🌐 PostgreSQL: connected to cloud cluster`);
+    console.log(`🗂️  Uploads:  ${path.join(__dirname, 'public/uploads')}\n`);
+  });
+}).catch(err => {
+  console.error('❌ Failed to connect to DB:', err);
 });

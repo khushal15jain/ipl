@@ -8,11 +8,9 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATABASE_PATH
-        value: /var/data/auction.db
+      - key: DATABASE_URL
+        value: postgresql://neondb_owner:npg_i5SElZgYUuv4@ep-wandering-credit-am7kjfuw-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require
+      - key: JWT_SECRET
+        generateValue: true
       - key: PORT
         value: 3000
-    disk:
-      name: auction-db
-      mountPath: /var/data
-      sizeGB: 1

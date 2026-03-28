@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const router = express.Router();
-const { getDB, logEvent } = require('../db/database');
+const { pool } = require('../db/database');
 const { generateToken } = require('../middleware/auth');
 
 // GET /login
@@ -19,15 +19,15 @@ router.post('/api/auth/register', async (req, res) => {
     if (password.length < 6)
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
-    const db = getDB();
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
-    if (existing)
+    const existingResult = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existingResult.rows.length > 0)
       return res.status(409).json({ error: 'Email already registered' });
 
     const hash = await bcrypt.hash(password, 12);
-    const result = db.prepare(
-      'INSERT INTO users (name, email, phone, password) VALUES (?, ?, ?, ?)'
-    ).run(name, email, phone, hash);
+    await pool.query(
+      'INSERT INTO users (name, email, phone, password) VALUES ($1, $2, $3, $4)',
+      [name, email, phone, hash]
+    );
 
     res.json({ success: true, message: 'Account created! Please login.' });
   } catch (err) {
@@ -42,8 +42,9 @@ router.post('/api/auth/login', async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ error: 'Email and password required' });
 
-    const db = getDB();
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const user = userResult.rows[0];
+    
     if (!user)
       return res.status(401).json({ error: 'Invalid email or password' });
 
@@ -52,7 +53,8 @@ router.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
 
     // Update last_login
-db.prepare("UPDATE users SET last_login = datetime('now', 'localtime') WHERE id = ?").run(user.id);
+    await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+    
     const token = generateToken(user);
     res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
     res.json({ success: true, user: { id: user.id, name: user.name, email: user.email } });
