@@ -41,6 +41,48 @@
     border-color: rgba(0, 255, 136, 0.4);
     box-shadow: inset 0 0 15px rgba(0, 255, 136, 0.05);
   }
+  
+  /* Broadcast Ticker */
+  .ticker-wrap {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(2, 6, 23, 0.95);
+    border-top: 1px solid rgba(0, 255, 136, 0.3);
+    height: 40px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+  }
+  .ticker-title {
+    background: var(--primary);
+    color: #000;
+    padding: 0 20px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: 0.75rem;
+    clip-path: polygon(0 0, 90% 0, 100% 100%, 0% 100%);
+    z-index: 10;
+  }
+  .ticker-content {
+    white-space: nowrap;
+    animation: ticker 30s linear infinite;
+    padding-left: 20px;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #fff;
+  }
+  @keyframes ticker {
+    0% { transform: translateX(100%); }
+    100% { transform: translateX(-100%); }
+  }
+  .ticker-item { display: inline-block; margin-right: 50px; }
+  .ticker-item span { color: var(--primary); margin-right: 8px; }
 </style>
 </head>
 <body class="page">
@@ -117,6 +159,15 @@
     <div style="font-family:'Rajdhani',sans-serif;font-size:1.8rem;font-weight:700;" id="sold-pname">—</div>
     <div style="font-family:'Orbitron',monospace;font-size:1.2rem;color:var(--green);margin-top:8px;" id="sold-price">₹ 0Cr</div>
     <div style="font-family:'Rajdhani',sans-serif;font-size:1.1rem;color:var(--cyan);margin-top:5px;" id="sold-team">—</div>
+  </div>
+</div>
+
+<!-- TICKER -->
+<div class="ticker-wrap">
+  <div class="ticker-title">FLASH NEWS</div>
+  <div class="ticker-content" id="ticker-content">
+    <div class="ticker-item"><span>●</span> WELCOME TO THE LIVE IPL AUCTION BROADCAST...</div>
+    <div class="ticker-item"><span>●</span> PLAYERS FROM ALL OVER THE WORLD ARE UP FOR GRABS...</div>
   </div>
 </div>
 
@@ -213,6 +264,8 @@ socket.on('player_sold', ({ player, team, price, sold_count, playerCounts }) => 
   showOverlay('SOLD!', player.name, `₹${price}Cr`, team.name, true);
   confetti();
   
+  addTickerItem(`PLAYER SOLD: ${player.name} to ${team.name} for ₹${price}Cr`);
+
   setTimeout(() => {
     hideOverlay();
     document.getElementById('st-name').textContent = 'Waiting for next player...';
@@ -222,6 +275,7 @@ socket.on('player_sold', ({ player, team, price, sold_count, playerCounts }) => 
 
 socket.on('player_unsold', ({ player, unsold_count }) => {
   document.getElementById('sb-unsold') && (document.getElementById('sb-unsold').textContent = unsold_count);
+  addTickerItem(`PLAYER UNSOLD: ${player.name}`);
   clearInterval(cdInterval);
   showOverlay('UNSOLD', player.name, '', '', false);
   setTimeout(() => {
@@ -291,6 +345,16 @@ function confetti() {
     el.style.cssText=`left:${Math.random()*100}%;top:-20px;background:hsl(${Math.random()*360},70%,50%);width:10px;height:10px;border-radius:50%;animation:fall ${Math.random()*2+2}s linear forwards;`;
     wrap.appendChild(el);
   }
+}
+
+function addTickerItem(text) {
+  const wrap = document.getElementById('ticker-content');
+  const item = document.createElement('div');
+  item.className = 'ticker-item';
+  item.innerHTML = `<span>●</span> ${text.toUpperCase()}`;
+  wrap.appendChild(item);
+  // Keep last 10
+  while (wrap.children.length > 10) wrap.removeChild(wrap.firstChild);
 }
 </script>
 

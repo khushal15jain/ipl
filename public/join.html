@@ -144,7 +144,8 @@
     </div>
   </div>
 
-  <button id="btn-submit" class="btn-join" disabled>JOIN TOURNAMENT →</button>
+  <button id="btn-submit" class="btn-join" disabled>JOIN AS TEAM OWNER →</button>
+  <button id="btn-spectator" class="btn-join" style="display:none; background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1); box-shadow: none; margin-top: 12px;">WATCH AS SPECTATOR 👁️</button>
   
   <div style="text-align:center;margin-top:24px;">
     <a href="/login" style="color:var(--muted);font-size:0.8rem;text-decoration:none;">Admin Login</a>
@@ -164,6 +165,7 @@
   codeInput.addEventListener('input', () => {
     statusEl.textContent = '';
     teamSection.style.display = 'none';
+    document.getElementById('btn-spectator').style.display = 'none';
     btnSubmit.disabled = true;
     
     clearTimeout(timer);
@@ -197,11 +199,13 @@
         teams.map(t => `<option value="${t.id}">${t.emoji || '🏏'} ${t.name}</option>`).join('');
       
       teamSection.style.display = 'block';
+      document.getElementById('btn-spectator').style.display = 'block';
     } catch (e) {
       statusEl.textContent = '❌ Connection Error';
-      statusEl.style.color = '#ff4d4d';
     }
   }
+
+  const btnSpec = document.getElementById('btn-spectator');
 
   teamSelect.addEventListener('change', () => {
     btnSubmit.disabled = !teamSelect.value;
@@ -209,14 +213,16 @@
 
   btnSubmit.addEventListener('click', () => {
     if (!currentAuction || !teamSelect.value) return;
-    
     const teamName = teamSelect.options[teamSelect.selectedIndex].text.replace(/^[^a-zA-Z]+/, '').trim();
-    
     localStorage.setItem('viewer_auction_id', currentAuction.id);
     localStorage.setItem('viewer_team_id',    teamSelect.value);
     localStorage.setItem('viewer_team_name',  teamName);
-    
     location.href = `/watch/${currentAuction.id}`;
+  });
+
+  btnSpec.addEventListener('click', () => {
+    if (!currentAuction) return;
+    location.href = `/audience/${currentAuction.id}`;
   });
 </script>
 
