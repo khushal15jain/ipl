@@ -30,6 +30,9 @@ app.get('/auction/:id', authMiddleware, (req, res) => res.sendFile('auction.html
 app.get('/results/:id', authMiddleware, (req, res) => res.sendFile('results.html', { root: './public' }));
 app.get('/create', authMiddleware, (req, res) => res.sendFile('create.html', { root: './public' }));
 app.get('/logout', (req, res) => { res.clearCookie('token'); res.redirect('/login'); });
+// Public viewer routes (no auth required)
+app.get('/join', (req, res) => res.sendFile('join.html', { root: './public' }));
+app.get('/watch/:id', (req, res) => res.sendFile('watch.html', { root: './public' }));
 
 // ── Socket.io — Real-time bidding ────────────────────────────────────────────
 // auctionId → { currentPlayer, currentBid, currentBidder, reshuffleCount }
@@ -63,6 +66,14 @@ io.on('connection', (socket) => {
 
     const playerCounts = getTeamPlayerCounts(auctionId, db);
 
+    // Fetch sold/retained players for viewer team rosters
+    const soldPlayers = db.prepare(
+      `SELECT p.*, t.name AS team_name FROM players p
+       JOIN teams t ON t.id = p.sold_to_team_id
+       WHERE p.auction_id = ? AND p.status IN ('sold','retained')
+       ORDER BY p.id`
+    ).all(auctionId);
+
     socket.emit('auction_state', {
       teams,
       auction,
@@ -71,6 +82,7 @@ io.on('connection', (socket) => {
       sold_count: sold,
       unsold_count: unsold,
       room: auctionRooms[auctionId] || null,
+      soldPlayers,
     });
     console.log(`📺 Joined auction room ${auctionId}`);
   });

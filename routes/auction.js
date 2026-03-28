@@ -7,7 +7,46 @@ const { getDB, logEvent } = require('../db/database');
 const { authMiddleware } = require('../middleware/auth');
 const { teamUpload, playerPhotoUpload, csvUpload } = require('../middleware/upload');
 
-// All routes require auth
+// ══════════════════════════════════════════════════════
+//  PUBLIC ENDPOINTS (no auth) — for Join Auction flow
+// ══════════════════════════════════════════════════════
+
+// GET /api/auctions/public — list all live/draft auctions (id, name, season, status)
+router.get('/api/auctions/public', (req, res) => {
+  const db = getDB();
+  const auctions = db.prepare(
+    `SELECT id, name, season, status FROM auctions WHERE status IN ('draft','live') ORDER BY created_at DESC`
+  ).all();
+  res.json({ auctions });
+});
+
+// GET /api/auctions/public/:name/teams — fetch teams for a named auction
+router.get('/api/auctions/public/:name/teams', (req, res) => {
+  const db = getDB();
+  const auction = db.prepare(
+    `SELECT id, name, season, status, bid_increment, max_players_per_team, purse_per_team FROM auctions WHERE name = ? COLLATE NOCASE ORDER BY created_at DESC LIMIT 1`
+  ).get(req.params.name);
+  if (!auction) return res.status(404).json({ error: 'Auction not found' });
+  const teams = db.prepare('SELECT id, name, emoji, logo_path, purse, spent FROM teams WHERE auction_id = ? ORDER BY id').all(auction.id);
+  res.json({ auction, teams });
+});
+
+// GET /api/auctions/public/:id/state — full viewer state for a given auction id
+router.get('/api/auctions/public/:id/state', (req, res) => {
+  const db = getDB();
+  const auction = db.prepare('SELECT * FROM auctions WHERE id = ?').get(req.params.id);
+  if (!auction) return res.status(404).json({ error: 'Not found' });
+  const teams = db.prepare('SELECT * FROM teams WHERE auction_id = ? ORDER BY id').all(auction.id);
+  const soldPlayers = db.prepare(
+    `SELECT p.*, t.name AS team_name FROM players p
+     JOIN teams t ON t.id = p.sold_to_team_id
+     WHERE p.auction_id = ? AND p.status IN ('sold','retained')
+     ORDER BY p.id`
+  ).all(auction.id);
+  res.json({ auction, teams, soldPlayers });
+});
+
+// All routes below require auth
 router.use(authMiddleware);
 
 // ══════════════════════════════════════════════════════

@@ -52,6 +52,15 @@
     </div>
   </div>
 
+  <!-- Join Auction banner -->
+  <div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:24px;background:linear-gradient(135deg,rgba(0,255,136,.07),rgba(0,209,255,.07));border:1px solid rgba(0,255,136,.25);">
+    <div>
+      <div style="font-family:'Orbitron',monospace;font-size:1.1rem;color:#00FF88;margin-bottom:5px;">🎯 JOIN A LIVE AUCTION</div>
+      <div style="color:var(--muted);font-size:.85rem;">Enter a tournament and bid for your team in real-time</div>
+    </div>
+    <button class="btn btn-green" onclick="openJoinModal()">🎯 JOIN AUCTION</button>
+  </div>
+
   <!-- Auctions list -->
   <div class="card card-accent">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
@@ -69,7 +78,101 @@
 
 <div id="toast"></div>
 
+<!-- JOIN AUCTION MODAL -->
+<div id="join-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);align-items:center;justify-content:center;">
+  <div style="background:var(--surface,#1a1a2e);border:1px solid rgba(0,255,136,.3);border-radius:16px;padding:32px;width:100%;max-width:460px;box-shadow:0 0 60px rgba(0,255,136,.12);">
+    <div style="font-family:'Orbitron',monospace;font-size:1.15rem;color:#00FF88;margin-bottom:6px;">🎯 JOIN AUCTION</div>
+    <div style="color:var(--muted);font-size:.82rem;margin-bottom:24px;">Find a tournament and select your team</div>
+
+    <div style="margin-bottom:16px;">
+      <label style="font-size:.78rem;color:var(--muted);margin-bottom:6px;display:block;">TOURNAMENT NAME</label>
+      <div style="display:flex;gap:8px;">
+        <input id="join-tournament" type="text" placeholder="e.g. IPL 2025" style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px 14px;color:#fff;font-size:.9rem;outline:none;" oninput="onTournamentInput()">
+        <button class="btn btn-outline btn-sm" onclick="lookupTournament()">FIND</button>
+      </div>
+      <div id="join-tournament-status" style="font-size:.72rem;margin-top:6px;min-height:16px;"></div>
+    </div>
+
+    <div id="join-team-section" style="display:none;margin-bottom:24px;">
+      <label style="font-size:.78rem;color:var(--muted);margin-bottom:6px;display:block;">YOUR TEAM</label>
+      <select id="join-team-select" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px 14px;color:#fff;font-size:.9rem;outline:none;appearance:none;cursor:pointer;">
+        <option value="">— Select a team —</option>
+      </select>
+    </div>
+
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-outline" style="flex:1;" onclick="closeJoinModal()">CANCEL</button>
+      <button class="btn btn-green" style="flex:1;" id="join-submit" onclick="submitJoin()" disabled>JOIN NOW →</button>
+    </div>
+  </div>
+</div>
+
 <script>
+// ── Join Auction Modal ───────────────────────────────────────────────────────
+let joinAuctionData = null; // { id, bid_increment, max_players_per_team }
+
+function openJoinModal() {
+  document.getElementById('join-modal').style.display = 'flex';
+  document.getElementById('join-tournament').value = '';
+  document.getElementById('join-tournament-status').textContent = '';
+  document.getElementById('join-team-section').style.display = 'none';
+  document.getElementById('join-submit').disabled = true;
+  joinAuctionData = null;
+  setTimeout(() => document.getElementById('join-tournament').focus(), 50);
+}
+function closeJoinModal() { document.getElementById('join-modal').style.display = 'none'; }
+
+function onTournamentInput() {
+  document.getElementById('join-tournament-status').textContent = '';
+  document.getElementById('join-team-section').style.display = 'none';
+  document.getElementById('join-submit').disabled = true;
+}
+
+async function lookupTournament() {
+  const name = document.getElementById('join-tournament').value.trim();
+  const status = document.getElementById('join-tournament-status');
+  if (!name) { status.textContent = '⚠️ Enter a tournament name.'; status.style.color='var(--red)'; return; }
+  status.textContent = 'Searching...'; status.style.color = 'var(--muted)';
+  try {
+    const r = await fetch(`/api/auctions/public/${encodeURIComponent(name)}/teams`);
+    if (!r.ok) { status.textContent = '❌ Tournament not found.'; status.style.color='var(--red)'; return; }
+    const { auction, teams } = await r.json();
+    joinAuctionData = auction;
+    status.textContent = `✅ Found: ${auction.name} (${auction.status.toUpperCase()})`;
+    status.style.color = 'var(--green)';
+    const sel = document.getElementById('join-team-select');
+    sel.innerHTML = '<option value="">— Select a team —</option>' +
+      teams.map(t => `<option value="${t.id}">${t.emoji || '🏏'} ${t.name}</option>`).join('');
+    document.getElementById('join-team-section').style.display = 'block';
+    sel.onchange = () => {
+      document.getElementById('join-submit').disabled = !sel.value;
+    };
+  } catch(e) {
+    status.textContent = '❌ Error finding tournament.'; status.style.color='var(--red)';
+  }
+}
+
+function submitJoin() {
+  const sel = document.getElementById('join-team-select');
+  if (!sel.value || !joinAuctionData) return;
+  const selectedOption = sel.options[sel.selectedIndex];
+  localStorage.setItem('viewer_auction_id', joinAuctionData.id);
+  localStorage.setItem('viewer_team_id',    sel.value);
+  localStorage.setItem('viewer_team_name',  selectedOption.text.replace(/^[^a-zA-Z]+/, '').trim());
+  location.href = `/watch/${joinAuctionData.id}`;
+}
+
+// Close modal on backdrop click
+document.getElementById('join-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeJoinModal();
+});
+
+// Also allow Enter key in the tournament input
+document.getElementById('join-tournament').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') lookupTournament();
+});
+
+// ── Dashboard logic ──────────────────────────────────────────────────────────
 async function loadUser() {
   const r = await fetch('/api/auth/me');
   if (!r.ok) { location.href = '/login'; return; }
