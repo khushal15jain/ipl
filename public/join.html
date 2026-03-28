@@ -145,7 +145,11 @@
   </div>
 
   <button id="btn-submit" class="btn-join" disabled>JOIN AS TEAM OWNER →</button>
-  <button id="btn-spectator" class="btn-join" style="display:none; background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1); box-shadow: none; margin-top: 12px;">WATCH AS SPECTATOR 👁️</button>
+  <button id="btn-spectator" class="btn-join" style="display:none; background: linear-gradient(135deg, var(--purple), #8E2DE2); color: #fff; margin-top: 12px;">WATCH LIVE BROADCAST 📺</button>
+  
+  <div id="direct-link-area" style="display:none; text-align:center; margin-top:16px;">
+    <button onclick="copyCurrentLink()" style="background:none; border:none; color:var(--cyan); font-size:0.8rem; cursor:pointer; text-decoration:underline;">🔗 Copy Direct Spectator Link</button>
+  </div>
   
   <div style="text-align:center;margin-top:24px;">
     <a href="/login" style="color:var(--muted);font-size:0.8rem;text-decoration:none;">Admin Login</a>
@@ -200,12 +204,19 @@
       
       teamSection.style.display = 'block';
       document.getElementById('btn-spectator').style.display = 'block';
+      document.getElementById('direct-link-area').style.display = 'block';
     } catch (e) {
       statusEl.textContent = '❌ Connection Error';
     }
   }
 
-  const btnSpec = document.getElementById('btn-spectator');
+  function copyCurrentLink() {
+    if (!currentAuction) return;
+    const url = `${location.origin}/broadcast/${currentAuction.id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      alert('🔗 Direct Spectator Link copied!');
+    });
+  }
 
   teamSelect.addEventListener('change', () => {
     btnSubmit.disabled = !teamSelect.value;

@@ -259,3 +259,33 @@ body.broadcast-page {
 .bc-sold-big { font-family: 'Orbitron', sans-serif; font-size: 8rem; font-weight: 900; color: var(--bc-gold); animation: expandIn 0.5s forwards; }
 
 @keyframes expandIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* 📱 MOBILE RESPONSIVENESS */
+@media (max-width: 1024px) {
+  .bc-main { padding: 80px 20px 100px 20px; gap: 20px; }
+  .bc-sidebar { width: 320px; }
+  .bc-player-name { font-size: 2.2rem; }
+}
+
+@media (max-width: 768px) {
+  body.broadcast-page { overflow-y: auto; height: auto; }
+  .bc-header { position: relative; top: 0; left: 0; right: 0; padding: 15px; background: var(--bc-surface); flex-direction: column; gap: 15px; align-items: center; text-align: center; }
+  .bc-scorebug { width: 100%; justify-content: space-around; gap: 10px; padding: 10px; }
+  .bc-score-val { font-size: 1.1rem; }
+  
+  .bc-main { flex-direction: column; height: auto; padding: 20px 15px 80px 15px; }
+  .bc-player-hero { width: 100%; max-width: 100%; }
+  .bc-card-overlay { flex-direction: column; padding: 20px; gap: 20px; align-items: center; text-align: center; }
+  .bc-player-img { width: 200px; height: 260px; }
+  .bc-player-name { font-size: 1.8rem; }
+  .bc-player-role { font-size: 0.9rem; letter-spacing: 2px; }
+  .bc-bid-val { font-size: 1.8rem; }
+  
+  .bc-sidebar { width: 100%; height: auto; }
+  .bc-panel { min-height: 300px; }
+  
+  .bc-sold-big { font-size: 4rem; }
+  .bc-ticker-wrap { height: 36px; }
+  .bc-ticker-lbl { padding: 0 12px; font-size: 0.65rem; }
+  .bc-ticker-marquee { font-size: 0.85rem; }
+}
