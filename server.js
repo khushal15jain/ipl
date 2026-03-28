@@ -13,15 +13,7 @@ const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*' } });
 
 const PORT = process.env.PORT || 3000;
-const fs = require("fs");
 
-if (!fs.existsSync("/data")) {
-  fs.mkdirSync("/data");
-}
-
-if (!fs.existsSync(dbPath)) {
-  console.log("Creating new database...");
-}
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
