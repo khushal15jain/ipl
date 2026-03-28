@@ -102,13 +102,11 @@ io.on('connection', (socket) => {
         soldPlayers: soldPlayersRes.rows,
       });
 
-      console.log(`📺 Auction ${auctionId} Sync: ${teamsRes.rowCount} teams, ${pendingRes.rowCount} pending players.`);
-      if (teamId) console.log(`👉 Joined as Team: ${teamId}`);
-      else console.log(`👀 Joined as Spectator`);
+      io.to(`auction_${auctionId}`).emit('sync_viewers', { count: io.sockets.adapter.rooms.get(`auction_${auctionId}`)?.size || 0 });
 
     } catch (err) {
-      console.error('❌ Socket Join Error:', err);
-      socket.emit('error', { message: 'Database error while joining auction' });
+      console.error(`❌ Socket Join Error [Auction ${auctionId}]:`, err.message);
+      socket.emit('error', { message: 'Database error while joining auction: ' + err.message });
     }
   });
 

@@ -137,8 +137,15 @@
 
 <script>
 const AID = location.pathname.split('/').pop();
-const MY_TEAM_ID = parseInt(localStorage.getItem('viewer_team_id'));
+const teamIdStr = localStorage.getItem('viewer_team_id');
+const MY_TEAM_ID = parseInt(teamIdStr);
 const MY_TEAM_NAME = localStorage.getItem('viewer_team_name') || 'Your Team';
+
+// SMART REDIRECT: If no team selected, go to broadcast station
+if (isNaN(MY_TEAM_ID)) {
+  console.log('👀 No team ID found, redirecting to broadcast...');
+  location.href = `/broadcast/${AID}`;
+}
 
 const socket = io();
 let teams = [], currentPlayer = null, currentBid = 0, currentBidder = null;
@@ -147,12 +154,29 @@ let maxPlayersPerTeam = 11;
 let teamPlayerCounts = {};
 let bidIncrement = 0.25;
 
+// Connection Feedback
+const connTimeout = setTimeout(() => {
+  const statusEl = document.getElementById('st-cur-bid');
+  if (statusEl && statusEl.textContent === 'Connecting to live feed...') {
+    statusEl.innerHTML = '<span style="color:var(--gold);">⚠️ Slow connection? Tap to <a href="javascript:location.reload()" style="color:var(--gold);">reload</a></span>';
+  }
+}, 5000);
+
+socket.on('connect_error', (err) => {
+  document.getElementById('st-cur-bid').textContent = '❌ Connection Error. Please refresh.';
+});
+
+socket.on('error', (err) => {
+  alert('🚫 Error: ' + (err.message || 'Could not join auction.'));
+});
+
 document.getElementById('my-team-name').textContent = MY_TEAM_NAME;
 
 // Join as participant
 socket.emit('join_auction', { auctionId: parseInt(AID), teamId: MY_TEAM_ID });
 
 socket.on('auction_state', (state) => {
+  clearTimeout(connTimeout);
   teams = state.teams;
   if (state.auction) {
     maxPlayersPerTeam = state.auction.max_players_per_team || 11;

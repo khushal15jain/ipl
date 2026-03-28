@@ -100,6 +100,25 @@
         let cdInterval = null, cdVal = 30;
         let teamPlayerCounts = {}, maxPlayersPerTeam = 11;
 
+        // Connection Handling
+        const connTimeout = setTimeout(() => {
+            const h = document.getElementById('hero-name');
+            if (h && h.textContent === 'WAITING FOR AUCTIONEER...') {
+                h.innerHTML = '<span style="color:var(--bc-gold); font-size:1.8rem;">⚠️ Slow connection. Refreshing...</span>';
+                setTimeout(() => location.reload(), 2000);
+            }
+        }, 8000);
+
+        socket.on('connect_error', (err) => {
+            console.error('🔌 Socket connection error:', err);
+            document.getElementById('hero-name').textContent = 'CONNECTION ERROR. RETRYING...';
+        });
+
+        socket.on('error', (err) => {
+            console.error('🚫 Socket application error:', err);
+            document.getElementById('hero-name').textContent = 'ERROR JOINING AUCTION';
+        });
+
         if (isNaN(AID)) {
             document.getElementById('hero-name').textContent = 'INVALID AUCTION ID';
         } else {
@@ -107,6 +126,7 @@
         }
 
         socket.on('auction_state', (state) => {
+            clearTimeout(connTimeout);
             teams = state.teams;
             if (state.auction) maxPlayersPerTeam = state.auction.max_players_per_team || 11;
             if (state.playerCounts) teamPlayerCounts = state.playerCounts;
