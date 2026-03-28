@@ -31,7 +31,8 @@ router.post('/api/auth/register', async (req, res) => {
 
     res.json({ success: true, message: 'Account created! Please login.' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('❌ Registration error:', err);
+    res.status(500).json({ error: 'Registration failed', details: err.message, stack: err.stack });
   }
 });
 
@@ -59,7 +60,8 @@ router.post('/api/auth/login', async (req, res) => {
     res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
     res.json({ success: true, user: { id: user.id, name: user.name, email: user.email } });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('❌ Login error:', err);
+    res.status(500).json({ error: 'Login failed', details: err.message, stack: err.stack });
   }
 });
 
