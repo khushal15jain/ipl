@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // Database file stored in /db folder
-const DB_PATH = path.join(__dirname, 'auction.db');
+const DB_PATH = path.join(__dirname,"db", 'auction.db');
 
 let db;
 
