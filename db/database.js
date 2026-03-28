@@ -3,7 +3,8 @@ const path = require('path');
 const fs = require('fs');
 
 // Database file stored in /db folder
-const DB_PATH = path.join(__dirname, 'auction.db');
+// Database path from environment variable (for Render persistent disk) or default local path
+const DB_PATH = process.env.DATABASE_PATH || path.join(__dirname, 'auction.db');
 
 let db;
 

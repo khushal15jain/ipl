@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: ipl-auction
+    env: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_PATH
+        value: /var/data/auction.db
+      - key: PORT
+        value: 3000
+    disk:
+      name: auction-db
+      mountPath: /var/data
+      sizeGB: 1
