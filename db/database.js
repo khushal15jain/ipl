@@ -1,10 +1,16 @@
 const { Pool } = require('pg');
 
 // Database connection string from environment variable
-const connectionString = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_i5SElZgYUuv4@ep-wandering-credit-am7kjfuw-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require';
+let connectionString = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_i5SElZgYUuv4@ep-wandering-credit-am7kjfuw-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require';
+
+// node-postgres doesn't support channel_binding, so we remove it if present
+connectionString = connectionString.replace('channel_binding=require', '').replace('&&', '&').replace('?&', '?');
 
 const pool = new Pool({
   connectionString: connectionString,
+  ssl: {
+    rejectUnauthorized: false // Required for some cloud providers like Neon/Render
+  }
 });
 
 let isInitialized = false;
