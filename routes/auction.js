@@ -27,7 +27,7 @@ router.get('/api/auctions/public', async (req, res) => {
 router.get('/api/auctions/public/join/:code', async (req, res) => {
   try {
     const auctionResult = await pool.query(
-      `SELECT id, name, season, status FROM auctions WHERE LOWER(joinCode) = LOWER($1)`,
+      `SELECT id, name, season, status FROM auctions WHERE LOWER(joincode) = LOWER($1)`,
       [req.params.code]
     );
     const auction = auctionResult.rows[0];
@@ -121,20 +121,20 @@ router.post('/api/auctions', async (req, res) => {
     let joinCode;
     let exists = true;
     while (exists) {
-      joinCode = 'IPL' + Math.random().toString(36).substring(2, 6).toUpperCase();
-      const check = await pool.query('SELECT id FROM auctions WHERE joinCode = $1', [joinCode]);
+      joincode = 'IPL' + Math.random().toString(36).substring(2, 6).toUpperCase();
+      const check = await pool.query('SELECT id FROM auctions WHERE joincode = $1', [joincode]);
       if (check.rowCount === 0) exists = false;
     }
 
     const result = await pool.query(`
-      INSERT INTO auctions (user_id, name, season, num_teams, purse_per_team, bid_increment, max_players_per_team, joinCode)
+      INSERT INTO auctions (user_id, name, season, num_teams, purse_per_team, bid_increment, max_players_per_team, joincode)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING id
-    `, [req.user.id, name, season || '2025', num_teams || 8, purse_per_team || 100, bid_increment || 0.25, max_players_per_team || 11, joinCode]);
+    `, [req.user.id, name, season || '2025', num_teams || 8, purse_per_team || 100, bid_increment || 0.25, max_players_per_team || 11, joincode]);
 
     const newId = result.rows[0].id;
-    await logEvent(newId, 'AUCTION_CREATED', `Auction "${name}" created (Code: ${joinCode})`);
-    res.json({ success: true, auction_id: newId, joinCode });
+    await logEvent(newId, 'AUCTION_CREATED', `Auction "${name}" created (Code: ${joincode})`);
+    res.json({ success: true, auction_id: newId, joincode });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

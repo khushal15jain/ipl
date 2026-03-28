@@ -203,7 +203,7 @@ async function loadAuctions() {
       <div style="flex:1;">
         <div style="display:flex;align-items:center;gap:12px;">
           <div style="font-family:'Rajdhani',sans-serif;font-size:1.05rem;font-weight:700;">🏏 ${a.name} <span style="color:var(--muted);font-size:.78rem;">(${a.season})</span></div>
-          ${a.joinCode ? `<code style="background:rgba(0,255,136,.1);color:#00FF88;padding:2px 8px;border-radius:4px;font-size:.75rem;border:1px solid rgba(0,255,136,.3);" title="Join Code">${a.joinCode}</code>` : ''}
+          ${a.joincode ? `<code style="background:rgba(0,255,136,.1);color:#00FF88;padding:2px 8px;border-radius:4px;font-size:.75rem;border:1px solid rgba(0,255,136,.3);" title="Join Code">${a.joincode}</code>` : ''}
         </div>
         <div style="font-size:.76rem;color:var(--muted);margin-top:3px;">${a.team_count} teams · ${a.player_count} players · ${a.sold_count} sold · Created ${new Date(a.created_at).toLocaleDateString()}</div>
       </div>

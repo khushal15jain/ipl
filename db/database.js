@@ -55,7 +55,7 @@ async function initSchema() {
         max_players_per_team  INTEGER DEFAULT 11,
         status                TEXT    DEFAULT 'draft',  -- draft | live | completed
         current_player_id     INTEGER,
-        joinCode              TEXT    UNIQUE,
+        joincode              TEXT    UNIQUE,
         created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         started_at            TIMESTAMP,
         completed_at          TIMESTAMP
@@ -133,14 +133,14 @@ async function initSchema() {
     `);
     
     if (colCheck.rowCount === 0) {
-      await client.query(`ALTER TABLE auctions ADD COLUMN joinCode TEXT UNIQUE`);
+      await client.query(`ALTER TABLE auctions ADD COLUMN joincode TEXT UNIQUE`);
     }
 
     // Generate codes for existing auctions if any
-    const missingCodes = await client.query(`SELECT id FROM auctions WHERE joinCode IS NULL`);
+    const missingCodes = await client.query(`SELECT id FROM auctions WHERE joincode IS NULL`);
     for (const row of missingCodes.rows) {
       const code = 'IPL' + Math.random().toString(36).substring(2, 6).toUpperCase();
-      await client.query(`UPDATE auctions SET joinCode = $1 WHERE id = $2`, [code, row.id]);
+      await client.query(`UPDATE auctions SET joincode = $1 WHERE id = $2`, [code, row.id]);
     }
 
     console.log(`✅ PostgreSQL database ready (connected via pool)`);
