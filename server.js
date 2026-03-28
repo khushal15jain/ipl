@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express    = require('express');
 const http       = require('http');
-const path       = require('path');
+const dbPath = path.join("/data", "auction.db");
 const cookieParser = require('cookie-parser');
 const { Server } = require('socket.io');
 const { getDB, logEvent } = require('./db/database');
@@ -12,6 +12,15 @@ const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*' } });
 
 const PORT = process.env.PORT || 3000;
+const fs = require("fs");
+
+if (!fs.existsSync("/data")) {
+  fs.mkdirSync("/data");
+}
+
+if (!fs.existsSync(dbPath)) {
+  console.log("Creating new database...");
+}
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
